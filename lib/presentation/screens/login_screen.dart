@@ -12,8 +12,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'owner@camprent.com');
-  final _passwordController = TextEditingController(text: 'admin123');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = true;
   bool _isLoading = false;
@@ -62,16 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _handleQuickLogin(AppRole role) {
-    if (role == AppRole.admin) {
-      _emailController.text = 'owner@camprent.com';
-      _passwordController.text = 'admin123';
-    } else {
-      _emailController.text = 'kasir@camprent.com';
-      _passwordController.text = 'kasir123';
-    }
-    ref.read(appStateProvider.notifier).quickLogin(role);
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -356,119 +347,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ],
                                 ),
                         ),
-                        const SizedBox(height: 22),
-
-                        // Divider Quick Login
-                        Row(
-                          children: [
-                            const Expanded(child: Divider(color: AppColors.border)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: Text(
-                                'AKUN AKSES CEPAT',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade500,
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ),
-                            const Expanded(child: Divider(color: AppColors.border)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Quick buttons (Owner vs Kasir)
-                        Row(
-                          children: [
-                            // Quick Owner
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => _handleQuickLogin(AppRole.admin),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                  side: BorderSide(color: AppColors.accent.withOpacity(0.6)),
-                                  backgroundColor: AppColors.accent.withOpacity(0.06),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: const Column(
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.admin_panel_settings, size: 16, color: AppColors.accent),
-                                        SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            'Owner / Admin',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.accent,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Akses Penuh',
-                                      style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-
-                            // Quick Kasir
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => _handleQuickLogin(AppRole.kasir),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                  side: BorderSide(color: AppColors.primary.withOpacity(0.5)),
-                                  backgroundColor: AppColors.primary.withOpacity(0.05),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: const Column(
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.store, size: 16, color: AppColors.primary),
-                                        SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            'Kasir (Staff)',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Operasional POS',
-                                      style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
                         const SizedBox(height: 18),
 
                         // System info footer

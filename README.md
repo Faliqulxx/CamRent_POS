@@ -6,7 +6,8 @@
 
 ## 📋 Daftar Isi
 1. [Tentang CampRent POS](#-tentang-camprent-pos)
-2. [Fitur Unggulan Sistem](#-fitur-unggulan-sistem)
+2. [Akun & Kredensial Login](#-akun--kredensial-login)
+3. [Fitur Unggulan Sistem](#-fitur-unggulan-sistem)
    - [A. Kasir & Transaksi Sewa (POS)](#a-kasir--transaksi-sewa-pos)
    - [B. Manajemen Jaminan & Deposit](#b-manajemen-jaminan--deposit)
    - [C. Pengembalian, Inspeksi Fisik & Denda](#c-pengembalian-inspeksi-fisik--denda)
@@ -14,21 +15,21 @@
    - [E. Laporan Keuangan & Analisis Piutang (Owner)](#e-laporan-keuangan--analisis-piutang-owner)
    - [F. Pengaturan Toko, Akun & Printer Thermal](#f-pengaturan-toko-akun--printer-thermal)
    - [G. Arsitektur Role & Hak Akses (Owner vs Kasir)](#g-arsitektur-role--hak-akses-owner-vs-kasir)
-3. [Alur Pemakaian Operasional (User Workflow)](#-alur-pemakaian-operasional-user-workflow)
+4. [Alur Pemakaian Operasional (User Workflow)](#-alur-pemakaian-operasional-user-workflow)
    - [1. Alur Awal Shift Kasir](#1-alur-awal-shift-kasir)
    - [2. Alur Transaksi Sewa Baru (Check-Out)](#2-alur-transaksi-sewa-baru-check-out)
    - [3. Alur Pengembalian Barang & Pelunasan (Check-In)](#3-alur-pengembalian-barang--pelunasan-check-in)
    - [4. Alur Tutup Shift Kasir](#4-alur-tutup-shift-kasir)
    - [5. Alur Owner Monitoring](#5-alur-owner-monitoring)
-4. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
-5. [Struktur Direktori Proyek](#-struktur-direktori-proyek)
-6. [Langkah Deployment & Persiapan Siap Pakai](#-langkah-deployment--persiapan-siap-pakai)
+5. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
+6. [Struktur Direktori Proyek](#-struktur-direktori-proyek)
+7. [Langkah Deployment & Persiapan Siap Pakai](#-langkah-deployment--persiapan-siap-pakai)
    - [A. Menjalankan di Lingkungan Pengembangan](#a-menjalankan-di-lingkungan-pengembangan)
    - [B. Build Android APK & App Bundle (Production)](#b-build-android-apk--app-bundle-production)
    - [C. Build & Deploy Web Production](#c-build--deploy-web-production)
    - [D. Checklist Migrasi ke Database & Cloud Real (Supabase)](#d-checklist-migrasi-ke-database--cloud-real-supabase)
    - [E. Konfigurasi Printer Thermal Fisik](#e-konfigurasi-printer-thermal-fisik)
-7. [Pengujian Otomatis (Testing)](#-pengujian-otomatis-testing)
+8. [Pengujian Otomatis (Testing)](#-pengujian-otomatis-testing)
 
 ---
 
@@ -40,6 +41,20 @@
 - **Inspeksi kondisi barang saat pengembalian** (bersih, kotor, rusak, hilang) dengan denda otomatis.
 - **Katalog produk sederhana tanpa varian warna/foto berat**, mengutamakan **varian ukuran** (misal: sepatu ukuran 39, 40, 41 atau tenda kapasitas 2P, 4P).
 - **Offline-First Resilience**: Tetap dapat memproses transaksi sewa di lokasi gunung/alam bebas dengan koneksi internet minim atau terputus.
+
+---
+
+## 🔐 Akun & Kredensial Login
+
+Gunakan data akun berikut untuk masuk ke sistem CampRent POS:
+
+| Peran (Role) | Email / Username | Kata Sandi (Password) | Hak Akses & Fitur Utama |
+| :--- | :--- | :--- | :--- |
+| **Owner / Admin** | `owner@camprent.com`<br>*(atau ketik `admin`)* | `admin123` | **Akses Penuh**: Akses seluruh menu (Kasir POS, Transaksi, Kelola Produk & Varian Ukuran CRUD, Pelanggan, Laporan Keuangan & Piutang, Pengaturan Toko & Akun Kasir, serta Audit Shift Seluruh Kasir). Bebas bertransaksi tanpa wajib buka shift kasir. |
+| **Kasir (Staff)** | `kasir@camprent.com`<br>*(atau ketik `kasir`)* | `kasir123` | **Operasional Kasir**: Wajib membuka shift dengan modal awal kas sebelum dapat bertransaksi, transaksi rental alat sewa baru, inspeksi barang & pelunasan pengembalian, cek ketersediaan stok (hanya lihat), dan rekonsiliasi kas saat tutup shift. |
+
+> [!TIP]
+> Form login mendukung input alamat email lengkap (`owner@camprent.com` / `kasir@camprent.com`) maupun username singkat (`owner`, `admin`, atau `kasir`).
 
 ---
 

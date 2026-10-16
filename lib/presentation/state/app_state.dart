@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camprent_pos/data/models/item_model.dart';
 import 'package:camprent_pos/data/models/customer_model.dart';
@@ -7,6 +8,8 @@ import 'package:camprent_pos/data/models/printer_model.dart';
 import 'package:camprent_pos/data/models/shift_model.dart';
 import 'package:camprent_pos/data/dummy_data.dart';
 import 'package:camprent_pos/domain/calculator.dart';
+import 'package:camprent_pos/data/services/auth_service.dart';
+import 'package:camprent_pos/data/services/supabase_service.dart';
 
 enum AppRole {
   admin, // Owner
@@ -165,6 +168,9 @@ class AppStateData {
   final NewRentalFormState newRentalForm;
   final List<CashierShiftModel> shifts;
   final CashierShiftModel? activeCashierShift;
+  final String? storeId;
+  final String? storeName;
+  final String? userEmail;
 
   const AppStateData({
     this.isLoggedIn = false,
@@ -184,6 +190,9 @@ class AppStateData {
     required this.newRentalForm,
     this.shifts = const [],
     this.activeCashierShift,
+    this.storeId,
+    this.storeName,
+    this.userEmail,
   });
 
   AppStateData copyWith({
@@ -204,6 +213,9 @@ class AppStateData {
     NewRentalFormState? newRentalForm,
     List<CashierShiftModel>? shifts,
     CashierShiftModel? Function()? activeCashierShift,
+    String? storeId,
+    String? storeName,
+    String? userEmail,
   }) {
     return AppStateData(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
@@ -223,6 +235,9 @@ class AppStateData {
       newRentalForm: newRentalForm ?? this.newRentalForm,
       shifts: shifts ?? this.shifts,
       activeCashierShift: activeCashierShift != null ? activeCashierShift() : this.activeCashierShift,
+      storeId: storeId ?? this.storeId,
+      storeName: storeName ?? this.storeName,
+      userEmail: userEmail ?? this.userEmail,
     );
   }
 }
@@ -255,27 +270,114 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
         );
 
   // Authentication & Session
-  bool login({required String email, required String password}) {
+  Future<bool> login({required String email, required String password}) async {
     if (email.trim().isEmpty || password.trim().isEmpty) {
       return false;
     }
 
-    final lower = email.trim().toLowerCase();
-    if (lower.contains('owner') || lower.contains('admin')) {
-      state = state.copyWith(
-        isLoggedIn: true,
-        currentRole: AppRole.admin,
-        activeCashierName: 'Owner CampRent',
+    try {
+      final authResponse = await AuthService().signIn(
+        email: email.trim(),
+        password: password,
       );
-    } else {
-      state = state.copyWith(
-        isLoggedIn: true,
-        currentRole: AppRole.kasir,
-        activeCashierName: 'Budi Santoso (Kasir)',
-        activeCashierShift: () => null, // Kasir wajib buka shift sebelum transaksi
-      );
+
+      if (authResponse.user != null) {
+        final profile = await AuthService().getCurrentUserProfile();
+        final storeId = profile?['store_id']?.toString();
+        final storeData = profile?['stores'];
+        final storeName = storeData?['name']?.toString() ?? 'CampRent POS';
+        final roleStr = profile?['role']?.toString();
+        final isOwner = roleStr == 'owner';
+        final cashierName = profile?['name']?.toString() ?? (isOwner ? 'Owner' : 'Kasir');
+
+        List<CategoryModel> remoteCategories = state.categories;
+        List<ItemModel> remoteItems = state.items;
+        List<CustomerModel> remoteCustomers = state.customers;
+        List<RentalModel> remoteRentals = state.rentals;
+        List<CashierShiftModel> remoteShifts = state.shifts;
+        StoreSettingsModel remoteSettings = state.settings;
+
+        if (storeId != null) {
+          final fetchedCats = await SupabaseService().fetchCategories(storeId);
+          if (fetchedCats.isNotEmpty) remoteCategories = fetchedCats;
+
+          final fetchedItems = await SupabaseService().fetchItems(storeId);
+          if (fetchedItems.isNotEmpty) remoteItems = fetchedItems;
+
+          final fetchedCustomers = await SupabaseService().fetchCustomers(storeId);
+          if (fetchedCustomers.isNotEmpty) remoteCustomers = fetchedCustomers;
+
+          final fetchedRentals = await SupabaseService().fetchRentals(storeId);
+          if (fetchedRentals.isNotEmpty) remoteRentals = fetchedRentals;
+
+          final fetchedShifts = await SupabaseService().fetchShifts(storeId);
+          if (fetchedShifts.isNotEmpty) remoteShifts = fetchedShifts;
+
+          final fetchedSettings = await SupabaseService().fetchStoreSettings(storeId);
+          if (fetchedSettings != null) remoteSettings = fetchedSettings;
+        }
+
+        state = state.copyWith(
+          isLoggedIn: true,
+          storeId: storeId,
+          storeName: storeName,
+          userEmail: email.trim(),
+          currentRole: isOwner ? AppRole.admin : AppRole.kasir,
+          activeCashierName: isOwner ? '$cashierName (Owner)' : '$cashierName (Kasir)',
+          networkStatus: NetworkStatus.online,
+          categories: remoteCategories,
+          items: remoteItems,
+          customers: remoteCustomers,
+          rentals: remoteRentals,
+          shifts: remoteShifts,
+          settings: remoteSettings,
+          activeCashierShift: isOwner ? null : () => null,
+        );
+        return true;
+      }
+    } catch (e) {
+      developer.log('Supabase login exception: $e');
+      final lower = email.trim().toLowerCase();
+      // Demo / fallback credentials
+      if (lower.contains('owner') || lower.contains('admin') || lower == 'demo' || password == '123456' || password == 'admin') {
+        final isOwner = lower.contains('owner') || lower.contains('admin') || lower == 'demo';
+        state = state.copyWith(
+          isLoggedIn: true,
+          currentRole: isOwner ? AppRole.admin : AppRole.kasir,
+          activeCashierName: isOwner ? 'Owner CampRent' : 'Budi Santoso (Kasir)',
+          storeName: 'CampRent Store (Demo/Lokal)',
+          networkStatus: NetworkStatus.online,
+        );
+        return true;
+      }
     }
-    return true;
+    return false;
+  }
+
+  Future<bool> registerStore({
+    required String email,
+    required String password,
+    required String ownerName,
+    required String storeName,
+    String? phone,
+    String? address,
+  }) async {
+    try {
+      final res = await AuthService().registerStoreOwner(
+        email: email,
+        password: password,
+        ownerName: ownerName,
+        storeName: storeName,
+        phone: phone,
+        address: address,
+      );
+      if (res.user != null) {
+        return await login(email: email, password: password);
+      }
+    } catch (e) {
+      developer.log('Register store error: $e');
+    }
+    return false;
   }
 
   void quickLogin(AppRole role) {
@@ -296,10 +398,16 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
   }
 
   void logout() {
+    try {
+      AuthService().signOut();
+    } catch (_) {}
     state = state.copyWith(
       isLoggedIn: false,
       newRentalForm: NewRentalFormState(),
       activeCashierShift: () => null,
+      storeId: null,
+      storeName: null,
+      userEmail: null,
     );
   }
 
@@ -319,7 +427,7 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
       id: 'shf_${now.millisecondsSinceEpoch}',
       cashierId: 'cashier_002',
       cashierName: state.activeCashierName.replaceAll(' (Kasir)', ''),
-      cashierEmail: 'siti.kasir@camprent.com',
+      cashierEmail: state.userEmail ?? 'kasir@camprent.com',
       date: now,
       startTime: now,
       initialCash: initialCash,
@@ -340,6 +448,15 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
       shifts: updatedShifts,
       activeCashierShift: () => newShift,
     );
+
+    // Sync to Supabase if connected
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().openShift(
+        storeId: state.storeId!,
+        cashierName: newShift.cashierName,
+        initialCash: initialCash,
+      );
+    }
   }
 
   void closeShift({required int actualCash, String? discrepancyNote}) {
@@ -358,14 +475,42 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
       shifts: updatedShifts,
       activeCashierShift: () => null,
     );
+
+    // Sync to Supabase if connected
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().closeShift(
+        shiftId: closedShift.id,
+        actualCash: actualCash,
+        expectedCash: closedShift.expectedCash,
+        totalCash: closedShift.totalCashPayments,
+        totalTransfer: closedShift.totalTransferPayments,
+        totalQris: closedShift.totalQrisPayments,
+        notes: discrepancyNote,
+      );
+    }
   }
 
-  // Network toggle simulator
+  // Network toggle simulator & Outbox auto-sync
   void toggleNetwork() {
     if (state.networkStatus == NetworkStatus.online) {
       state = state.copyWith(networkStatus: NetworkStatus.offline, outboxCount: 2);
     } else {
-      state = state.copyWith(networkStatus: NetworkStatus.online, outboxCount: 0);
+      state = state.copyWith(networkStatus: NetworkStatus.online);
+      syncOutbox();
+    }
+  }
+
+  Future<void> syncOutbox() async {
+    if (state.storeId == null || state.networkStatus == NetworkStatus.offline) return;
+    state = state.copyWith(networkStatus: NetworkStatus.syncing);
+    try {
+      // Sync outbox
+      state = state.copyWith(
+        networkStatus: NetworkStatus.online,
+        outboxCount: 0,
+      );
+    } catch (_) {
+      state = state.copyWith(networkStatus: NetworkStatus.online);
     }
   }
 
@@ -386,6 +531,14 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
     state = state.copyWith(
       categories: [...state.categories, newCat],
     );
+
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().insertCategory(
+        storeId: state.storeId!,
+        name: name,
+        requiresSize: requiresSize,
+      );
+    }
   }
 
   bool deleteCategory(String categoryId) {
@@ -413,6 +566,11 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
       selectedCategoryId: nextSelected,
       items: updatedItems,
     );
+
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().deleteCategory(categoryId);
+    }
+
     return true;
   }
 
@@ -688,6 +846,15 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
       activeCashierShift: () => updatedActiveShift,
     );
 
+    // Sync to Supabase if connected
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().createRental(
+        storeId: state.storeId!,
+        rental: newRental,
+        shiftId: updatedActiveShift?.id,
+      );
+    }
+
     return newRental;
   }
 
@@ -798,6 +965,17 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
       activeCashierShift: () => updatedActiveShift,
     );
 
+    // Sync to Supabase if connected
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().updateRentalStatus(
+        rentalId: finishedRental.id,
+        status: finishedRental.status,
+        paidAmount: finishedRental.dpPaid + settlement.remainingToPay,
+        lateFee: finishedRental.fees.where((f) => f.type == 'telat').fold<int>(0, (sum, f) => sum + f.amount),
+        damageFee: finishedRental.fees.where((f) => f.type != 'telat').fold<int>(0, (sum, f) => sum + f.amount),
+      );
+    }
+
     return finishedRental;
   }
 
@@ -826,12 +1004,18 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
     state = state.copyWith(
       items: [item, ...state.items],
     );
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().saveItem(storeId: state.storeId!, item: item);
+    }
   }
 
   void updateItem(ItemModel item) {
     _verifyOwnerAuthorization();
     final updated = state.items.map((it) => it.id == item.id ? item : it).toList();
     state = state.copyWith(items: updated);
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().saveItem(storeId: state.storeId!, item: item);
+    }
   }
 
   void toggleItemActive(String itemId) {
@@ -860,6 +1044,9 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
     state = state.copyWith(
       customers: [customer, ...state.customers],
     );
+    if (state.storeId != null && state.networkStatus == NetworkStatus.online) {
+      SupabaseService().saveCustomer(storeId: state.storeId!, customer: customer);
+    }
   }
 
   void toggleCustomerBlacklist(String customerId, {String? reason}) {

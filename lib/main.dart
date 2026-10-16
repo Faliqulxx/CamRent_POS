@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:camprent_pos/core/config/supabase_config.dart';
 import 'package:camprent_pos/core/theme/app_theme.dart';
 import 'package:camprent_pos/presentation/screens/main_shell.dart';
 import 'package:camprent_pos/presentation/screens/login_screen.dart';
@@ -11,6 +13,17 @@ void main() async {
   try {
     await initializeDateFormatting('id_ID', null);
   } catch (_) {}
+
+  // Inisialisasi Supabase Backend
+  try {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
+  } catch (e) {
+    debugPrint('Supabase initialize error: $e');
+  }
+
   runApp(
     const ProviderScope(
       child: CampRentApp(),

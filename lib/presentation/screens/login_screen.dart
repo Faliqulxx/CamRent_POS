@@ -32,8 +32,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 300));
-
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -45,7 +43,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    final success = ref.read(appStateProvider.notifier).login(
+    final success = await ref.read(appStateProvider.notifier).login(
           email: email,
           password: password,
         );
@@ -56,13 +54,196 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       if (!success) {
         setState(() {
-          _errorMessage = 'Email atau kata sandi tidak valid.';
+          _errorMessage = 'Email atau kata sandi tidak valid. Pastikan akun terdaftar di Supabase atau gunakan demo.';
         });
       }
     }
   }
 
+  void _showRegisterStoreDialog() {
+    final nameCtrl = TextEditingController();
+    final storeCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    bool isRegLoading = false;
+    String? regError;
 
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.storefront, color: AppColors.primary),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Daftar Toko Baru', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Akun Pemilik (Owner Multi-Tenant)', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (regError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(regError!, style: TextStyle(color: Colors.red.shade800, fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  const Text('Nama Toko Rental', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: storeCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Contoh: Merbabu Outdoor Rent',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Nama Lengkap Pemilik (Owner)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Contoh: Ahmad Rizky',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Email Login', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      hintText: 'owner@tokoanda.com',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Kata Sandi (Minimal 6 Karakter)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: passCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Minimal 6 karakter',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Nomor WhatsApp Toko', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      hintText: '08123456789',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: isRegLoading
+                  ? null
+                  : () async {
+                      if (storeCtrl.text.trim().isEmpty ||
+                          nameCtrl.text.trim().isEmpty ||
+                          emailCtrl.text.trim().isEmpty ||
+                          passCtrl.text.trim().length < 6) {
+                        setDialogState(() {
+                          regError = 'Semua field wajib diisi dan password minimal 6 karakter.';
+                        });
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isRegLoading = true;
+                        regError = null;
+                      });
+
+                      final success = await ref.read(appStateProvider.notifier).registerStore(
+                            email: emailCtrl.text.trim(),
+                            password: passCtrl.text.trim(),
+                            ownerName: nameCtrl.text.trim(),
+                            storeName: storeCtrl.text.trim(),
+                            phone: phoneCtrl.text.trim(),
+                          );
+
+                      if (ctx.mounted) {
+                        if (success) {
+                          Navigator.pop(ctx);
+                        } else {
+                          setDialogState(() {
+                            isRegLoading = false;
+                            regError = 'Gagal mendaftarkan toko. Periksa koneksi internet atau gunakan email lain.';
+                          });
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isRegLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Daftar & Masuk'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +251,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isMobile = size.width < 540;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F2), // Natural outdoor light tone
+      backgroundColor: const Color(0xFFF1F5F2),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -146,33 +327,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.offline_bolt_outlined, size: 14, color: AppColors.primary),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Offline-First POS Ready',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                      ),
+                              const SizedBox(height: 10),
+
+                              // Supabase Cloud Connected Badge
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
                                     ),
-                                  ],
-                                ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.cloud_done, size: 14, color: Color(0xFF059669)),
+                                        SizedBox(width: 5),
+                                        Text(
+                                          'Supabase Cloud Aktif',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF047857),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.offline_bolt_outlined, size: 14, color: AppColors.primary),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Multi-Tenant SaaS',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 20),
 
                         // Error Banner if any
                         if (_errorMessage != null) ...[
@@ -205,7 +418,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                         // Email Field
                         const Text(
-                          'Email atau Username',
+                          'Email Akun Toko',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -290,7 +503,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         const SizedBox(height: 10),
 
-                        // Remember Me / Offline Token Checkbox
+                        // Quick demo buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  _emailController.text = 'owner@camprent.com';
+                                  _passwordController.text = 'admin123';
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: const Text('Isi Demo Owner', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  _emailController.text = 'kasir@camprent.com';
+                                  _passwordController.text = 'kasir123';
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: const Text('Isi Demo Kasir', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Remember Me Checkbox
                         Row(
                           children: [
                             SizedBox(
@@ -312,7 +561,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
 
                         // Login Button
                         ElevatedButton(
@@ -347,7 +596,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ],
                                 ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 12),
+
+                        // Register New Store Button
+                        OutlinedButton.icon(
+                          onPressed: _showRegisterStoreDialog,
+                          icon: const Icon(Icons.add_business, size: 16),
+                          label: const Text(
+                            'Daftar Toko Baru (Pemilik / Owner)',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
 
                         // System info footer
                         Container(
@@ -360,11 +628,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.terminal, size: 13, color: AppColors.textSecondary),
+                              Icon(Icons.cloud_sync, size: 14, color: AppColors.primary),
                               SizedBox(width: 6),
                               Flexible(
                                 child: Text(
-                                  'Perangkat DEV-A01 • Database SQLite Lokal Terverifikasi',
+                                  'Supabase PostgreSQL • RLS Store Isolation • SQLite Cache',
                                   textAlign: TextAlign.center,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(

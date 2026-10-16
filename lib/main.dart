@@ -16,8 +16,10 @@ void main() async {
 
   // Inisialisasi Supabase Backend
   try {
+    // ignore: deprecated_member_use
     await Supabase.initialize(
       url: SupabaseConfig.url,
+      // ignore: deprecated_member_use
       anonKey: SupabaseConfig.anonKey,
     );
   } catch (e) {

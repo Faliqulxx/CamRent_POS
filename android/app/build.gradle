@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.camprent_pos"
-    compileSdk = 35
+    compileSdk = 34
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -21,16 +21,14 @@ android {
 
     defaultConfig {
         applicationId = "com.example.camprent_pos"
-        // supabase_flutter requires minSdk 21+
         minSdk = 21
-        targetSdk = 35
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
         release {
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
             minifyEnabled = false
             shrinkResources = false

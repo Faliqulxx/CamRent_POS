@@ -365,7 +365,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 10),
                               child: Text(
-                                'AKUN UJI COBA CEPAT',
+                                'AKUN AKSES CEPAT',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,

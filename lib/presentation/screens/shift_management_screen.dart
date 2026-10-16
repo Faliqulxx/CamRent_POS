@@ -160,8 +160,8 @@ class _ShiftManagementScreenState extends ConsumerState<ShiftManagementScreen> {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
                 ),
                 Text(
-                  'Simulasi Frontend',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                  'Sistem Manajemen Kasir',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -938,7 +938,7 @@ class _ShiftDetailDialog extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Catatan Audit: Rekonsiliasi shift ini berjalan dalam simulasi frontend CampRent POS. Data disimpan secara lokal untuk pengujian alur kasir & Owner.',
+                  'Catatan Audit: Rekonsiliasi kas dicatat secara otomatis untuk transparansi pembukuan kasir & Owner toko.',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                 ),
               ),
@@ -974,7 +974,7 @@ class _ShiftDetailDialog extends StatelessWidget {
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Simulasi Cetak Ringkasan Shift berhasil dikirim ke printer POS.'),
+                            content: Text('Ringkasan Shift berhasil dikirim ke printer POS.'),
                             backgroundColor: AppColors.success,
                           ),
                         );

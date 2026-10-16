@@ -51,7 +51,7 @@ class LoginRoleDialog extends ConsumerWidget {
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                         ),
                         Text(
-                          'Simulasi login sesuai aturan PRD (Owner vs Kasir)',
+                          'Pilih profil akses pengguna (Owner atau Kasir)',
                           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                         ),
                       ],

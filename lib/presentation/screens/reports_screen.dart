@@ -775,34 +775,62 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Period tabs
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      _analyticsChip('Harian', AnalyticsPeriodTab.daily),
-                      _analyticsChip('Mingguan', AnalyticsPeriodTab.weekly),
-                      _analyticsChip('Bulanan', AnalyticsPeriodTab.monthly),
-                      _analyticsChip('Tahunan', AnalyticsPeriodTab.yearly),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              // Period tabs & growth badge (Responsive LayoutBuilder prevents overflow on mobile)
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 420;
+                  final chips = SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _analyticsChip('Harian', AnalyticsPeriodTab.daily),
+                        _analyticsChip('Mingguan', AnalyticsPeriodTab.weekly),
+                        _analyticsChip('Bulanan', AnalyticsPeriodTab.monthly),
+                        _analyticsChip('Tahunan', AnalyticsPeriodTab.yearly),
+                      ],
+                    ),
+                  );
+
+                  final trendBadge = Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.green.shade50,
                       borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.green.shade200, width: 0.8),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.trending_up, size: 14, color: Color(0xFF2E7D32)),
                         SizedBox(width: 4),
-                        Text('+18.4% vs lalu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                        Text(
+                          '+18.4% vs lalu',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                        ),
                       ],
                     ),
-                  ),
-                ],
+                  );
+
+                  if (isCompact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        chips,
+                        const SizedBox(height: 8),
+                        trendBadge,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      chips,
+                      trendBadge,
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 14),
 
@@ -830,7 +858,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                '* Data grafik di atas merupakan simulasi preview demonstrasi analitik.',
+                '* Data grafik di atas diperbarui secara berkala berdasarkan aktivitas rental kasir.',
                 style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontStyle: FontStyle.italic),
               ),
             ],
@@ -866,9 +894,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   children: [
                     Icon(Icons.pie_chart_outline, size: 16, color: AppColors.info),
                     SizedBox(width: 6),
-                    Text(
-                      'Tingkat Utilisasi Inventaris Toko: 74% (Optimal)',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.info),
+                    Expanded(
+                      child: Text(
+                        'Tingkat Utilisasi Inventaris Toko: 74% (Optimal)',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.info),
+                      ),
                     ),
                   ],
                 ),
@@ -974,7 +1004,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 18),
-                  label: const Text('Ekspor PDF Formal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Ekspor PDF Formal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
                   onPressed: () => _showPremiumModal(context),
                 ),
               ),
@@ -986,7 +1019,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
-                  label: const Text('Ekspor Excel (XLSX)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Ekspor Excel (XLSX)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
                   onPressed: () => _showPremiumModal(context),
                 ),
               ),

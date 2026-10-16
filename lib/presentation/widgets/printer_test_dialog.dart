@@ -127,7 +127,7 @@ class PrinterTestDialog extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
 
-                    // Font sizes demonstration
+                    // Font sizes preview
                     const Text('FONT SIZE: NORMAL', style: TextStyle(fontFamily: 'Courier', fontSize: 11)),
                     const Text('FONT SIZE: BOLD', style: TextStyle(fontFamily: 'Courier', fontSize: 11, fontWeight: FontWeight.bold)),
                     const Text('ALIGN: CENTER', style: TextStyle(fontFamily: 'Courier', fontSize: 11)),

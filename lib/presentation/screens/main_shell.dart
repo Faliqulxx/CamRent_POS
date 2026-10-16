@@ -9,7 +9,6 @@ import 'package:camprent_pos/presentation/screens/customers_screen.dart';
 import 'package:camprent_pos/presentation/screens/reports_screen.dart';
 import 'package:camprent_pos/presentation/screens/settings_screen.dart';
 import 'package:camprent_pos/presentation/screens/shift_management_screen.dart';
-import 'package:camprent_pos/presentation/widgets/login_role_dialog.dart';
 import 'package:camprent_pos/presentation/widgets/open_shift_view.dart';
 import 'package:camprent_pos/presentation/widgets/shift_guard_dialog.dart';
 
@@ -178,8 +177,8 @@ class _MainShellState extends ConsumerState<MainShell> {
                       backgroundColor: isOnline ? Colors.orange.shade800 : AppColors.success,
                       content: Text(
                         isOnline
-                            ? 'Mode Offline disimulasikan: Transaksi disimpan di lokal database SQLite.'
-                            : 'Mode Online aktif: 2 transaksi outbox tersinkron otomatis ke Supabase.',
+                            ? 'Mode Offline aktif: Transaksi disimpan di database lokal.'
+                            : 'Mode Online aktif: Transaksi tersinkron otomatis ke server.',
                       ),
                     ),
                   );
@@ -261,14 +260,13 @@ class _MainShellState extends ConsumerState<MainShell> {
               ),
             ),
 
-          // User Role Profile Button (PRD 2: Owner vs Kasir Switcher Dialog)
+          // Logged-in Account Display (Tampilan akun aktif)
           Padding(
-            padding: EdgeInsets.only(right: isMobile ? 8 : 12),
-            child: InkWell(
-              onTap: () => LoginRoleDialog.show(context),
-              borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.only(right: 6),
+            child: Tooltip(
+              message: 'Akun aktif: ${appState.activeCashierName}',
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: isMobile ? 7 : 10, vertical: 5),
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: isAdmin ? AppColors.accent : Colors.white.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(16),
@@ -284,22 +282,53 @@ class _MainShellState extends ConsumerState<MainShell> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isAdmin ? Icons.admin_panel_settings : Icons.store,
+                      isAdmin ? Icons.admin_panel_settings : Icons.person,
                       size: isMobile ? 13 : 15,
                       color: Colors.white,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 5),
                     Text(
-                      isAdmin ? 'Owner' : 'Kasir',
+                      isAdmin ? 'Owner' : (appState.activeCashierName.isNotEmpty ? appState.activeCashierName.split(' ').first : 'Kasir'),
                       style: TextStyle(
                         fontSize: isMobile ? 11 : 12,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(width: 2),
-                    Icon(Icons.arrow_drop_down, size: isMobile ? 14 : 16, color: Colors.white70),
                   ],
+                ),
+              ),
+            ),
+          ),
+
+          // Tombol Logout
+          Padding(
+            padding: EdgeInsets.only(right: isMobile ? 8 : 12),
+            child: Tooltip(
+              message: 'Keluar / Logout Akun',
+              child: InkWell(
+                onTap: () => _confirmLogout(context),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 7 : 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade700.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.redAccent.withOpacity(0.6), width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.logout, size: 14, color: Colors.white),
+                      if (!isMobile) ...[
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Keluar',
+                          style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -348,6 +377,44 @@ class _MainShellState extends ConsumerState<MainShell> {
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: destinations,
         ),
+      ),
+    );
+  }
+
+  void _confirmLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: AppColors.danger),
+            SizedBox(width: 8),
+            Text('Konfirmasi Keluar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'Apakah Anda yakin ingin keluar dari akun saat ini? Sesi Anda akan diakhiri dan kembali ke halaman login.',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(appStateProvider.notifier).logout();
+            },
+            child: const Text('Keluar'),
+          ),
+        ],
       ),
     );
   }

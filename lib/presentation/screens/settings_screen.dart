@@ -191,7 +191,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             // ==========================================
             _buildSectionHeader(
               title: 'Preview Struk Toko',
-              subtitle: 'Simulasi tampilan informasi toko dan layout struk thermal kasir.',
+              subtitle: 'Tampilan informasi toko dan layout struk thermal kasir.',
               icon: Icons.receipt_long_rounded,
             ),
             const SizedBox(height: 10),
@@ -703,7 +703,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Demo Channels Preview (Non-active representation)
+            // Saluran Media Sosial Toko
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -715,9 +715,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 spacing: 16,
                 runSpacing: 8,
                 children: [
-                  _buildSocialChannelDemo(Icons.camera_alt_outlined, 'Instagram', '@camprent.id'),
-                  _buildSocialChannelDemo(Icons.facebook_outlined, 'Facebook', 'CampRent Outdoor'),
-                  _buildSocialChannelDemo(Icons.video_library_outlined, 'TikTok', '@camprent_official'),
+                  _buildSocialChannelBadge(Icons.camera_alt_outlined, 'Instagram', '@camprent.id'),
+                  _buildSocialChannelBadge(Icons.facebook_outlined, 'Facebook', 'CampRent Outdoor'),
+                  _buildSocialChannelBadge(Icons.video_library_outlined, 'TikTok', '@camprent_official'),
                 ],
               ),
             ),
@@ -747,7 +747,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildSocialChannelDemo(IconData icon, String name, String handle) {
+  Widget _buildSocialChannelBadge(IconData icon, String name, String handle) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1418,7 +1418,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // MODAL DIALOGS
   // ==========================================
 
-  // Dialog: Edit Akun Kasir (Simulasi Frontend)
+  // Dialog: Edit Akun Kasir
   void _showEditCashierDialog(CashierAccountModel cashier, int index) {
     final nameCtrl = TextEditingController(text: cashier.name);
     final emailCtrl = TextEditingController(text: cashier.email);
@@ -1559,7 +1559,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     backgroundColor: AppColors.primary,
-                                    content: Text('Akun kasir "${nameCtrl.text.trim()}" berhasil diperbarui (Simulasi frontend)'),
+                                    content: Text('Akun kasir "${nameCtrl.text.trim()}" berhasil diperbarui.'),
                                   ),
                                 );
                               }
@@ -1657,7 +1657,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Dialog: Edit Pengaturan Toko & Aturan Sewa (Simulasi Frontend)
+  // Dialog: Edit Pengaturan Toko & Aturan Sewa
   void _showEditStoreSettingsDialog() {
     final storeNameCtrl = TextEditingController(text: _storeName);
     final storePhoneCtrl = TextEditingController(text: _storePhone);
@@ -1927,7 +1927,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               backgroundColor: AppColors.primary,
-                              content: Text('Pengaturan toko berhasil diperbarui (Simulasi frontend)'),
+                              content: Text('Pengaturan toko berhasil diperbarui.'),
                             ),
                           );
                         }

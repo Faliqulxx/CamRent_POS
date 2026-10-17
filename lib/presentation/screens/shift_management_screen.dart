@@ -24,7 +24,11 @@ class _ShiftManagementScreenState extends ConsumerState<ShiftManagementScreen> {
     final allShifts = appState.shifts;
 
     // Summary Metrics
-    final activeCount = allShifts.where((s) => s.status == ShiftStatus.sedangBerjalan).length;
+    final activeCashierNames = allShifts
+        .where((s) => s.status == ShiftStatus.sedangBerjalan)
+        .map((s) => s.cashierName.toLowerCase().trim())
+        .toSet();
+    final activeCount = activeCashierNames.length;
     final unopenCount = allShifts.where((s) => s.status == ShiftStatus.belumBuka).length;
     final completedCount = allShifts.where((s) => s.status == ShiftStatus.selesai).length;
     final totalCash = allShifts.fold<int>(0, (sum, s) => sum + s.totalCashPayments);
@@ -459,6 +463,23 @@ class _ShiftManagementScreenState extends ConsumerState<ShiftManagementScreen> {
                   ),
                   const SizedBox(width: 8),
 
+                  // Tombol Tutup Shift (Khusus shift yang sedang berjalan)
+                  if (shift.status == ShiftStatus.sedangBerjalan) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                        side: BorderSide(color: Colors.red.shade300),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.stop_circle_outlined, size: 14),
+                      label: const Text('Tutup Shift', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () => _confirmCloseShift(context, shift),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+
                   // Detail Button
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -611,8 +632,56 @@ class _ShiftManagementScreenState extends ConsumerState<ShiftManagementScreen> {
   void _showShiftDetail(BuildContext context, CashierShiftModel shift) {
     showDialog(
       context: context,
-      builder: (ctx) => _ShiftDetailDialog(shift: shift),
+      builder: (ctx) => _ShiftDetailDialog(
+        shift: shift,
+        onCloseShift: () => _confirmCloseShift(context, shift),
+      ),
     );
+  }
+
+  Future<void> _confirmCloseShift(BuildContext context, CashierShiftModel shift) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
+            SizedBox(width: 8),
+            Text('Tutup Shift Kasir?'),
+          ],
+        ),
+        content: Text(
+          'Tutup shift untuk "${shift.cashierName}"?\n'
+          'Waktu Mulai: ${DateFormatter.formatTime(shift.startTime)} • Modal Awal: ${CurrencyFormatter.format(shift.initialCash)}\n\n'
+          'Kas akhir fisik akan disamakan dengan kas yang diharapkan (${CurrencyFormatter.format(shift.expectedCash)}).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Tutup Shift', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      ref.read(appStateProvider.notifier).closeShiftById(
+        shiftId: shift.id,
+        actualCash: shift.expectedCash,
+        discrepancyNote: 'Ditutup secara manual oleh Owner dari menu monitoring shift.',
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Shift kasir "${shift.cashierName}" berhasil ditutup.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 }
 
@@ -681,8 +750,9 @@ class _MetricItem extends StatelessWidget {
 /// Detail Laporan Shift oleh Owner (Section 4)
 class _ShiftDetailDialog extends StatelessWidget {
   final CashierShiftModel shift;
+  final VoidCallback? onCloseShift;
 
-  const _ShiftDetailDialog({required this.shift});
+  const _ShiftDetailDialog({required this.shift, this.onCloseShift});
 
   @override
   Widget build(BuildContext context) {
@@ -942,7 +1012,24 @@ class _ShiftDetailDialog extends StatelessWidget {
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                 ),
               ),
-              const SizedBox(height: 20),
+              // Tombol Tutup Shift (Owner Action)
+              if (shift.status == ShiftStatus.sedangBerjalan && onCloseShift != null) ...[
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade300),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                  label: const Text('Tutup Shift Ini Sekarang', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    onCloseShift!();
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // Buttons
               Row(

@@ -24,6 +24,7 @@ class _CloseShiftDialogState extends ConsumerState<CloseShiftDialog> {
   final TextEditingController _actualCashController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   int? _actualCash;
+  bool _isClosing = false;
 
   @override
   void initState() {
@@ -43,7 +44,7 @@ class _CloseShiftDialogState extends ConsumerState<CloseShiftDialog> {
     super.dispose();
   }
 
-  void _handleConfirmClose() {
+  Future<void> _handleConfirmClose() async {
     if (_actualCash == null || _actualCash! < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -68,20 +69,37 @@ class _CloseShiftDialogState extends ConsumerState<CloseShiftDialog> {
       return;
     }
 
-    ref.read(appStateProvider.notifier).closeShift(
-          actualCash: _actualCash!,
-          discrepancyNote: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null,
+    setState(() => _isClosing = true);
+    try {
+      await ref.read(appStateProvider.notifier).closeShift(
+            actualCash: _actualCash!,
+            discrepancyNote: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null,
+          );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Shift kasir berhasil ditutup dan laporan telah tersimpan ke database.'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 3),
+          ),
         );
-
-    Navigator.of(context).pop();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Shift kasir berhasil ditutup dan laporan telah direkonsiliasi.'),
-        backgroundColor: AppColors.success,
-        duration: Duration(seconds: 3),
-      ),
-    );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menutup shift: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isClosing = false);
+      }
+    }
   }
 
   @override
@@ -353,7 +371,7 @@ class _CloseShiftDialogState extends ConsumerState<CloseShiftDialog> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: _isClosing ? null : () => Navigator.of(context).pop(),
                       child: const Text('Batal'),
                     ),
                   ),
@@ -368,15 +386,21 @@ class _CloseShiftDialogState extends ConsumerState<CloseShiftDialog> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         elevation: 1,
                       ),
-                      icon: const Icon(Icons.lock_clock, size: 18),
-                      label: const FittedBox(
+                      icon: _isClosing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Icon(Icons.lock_clock, size: 18),
+                      label: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'Konfirmasi & Tutup Shift',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          _isClosing ? 'Menyimpan...' : 'Konfirmasi & Tutup Shift',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
-                      onPressed: _handleConfirmClose,
+                      onPressed: _isClosing ? null : _handleConfirmClose,
                     ),
                   ),
                 ],

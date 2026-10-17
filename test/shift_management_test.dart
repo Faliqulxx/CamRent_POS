@@ -130,5 +130,51 @@ void main() {
       expect(closedShift.actualCash, 200000);
       expect(closedShift.endTime, isNotNull);
     });
+
+    test('7. Pencegahan Shift Ganda: Membuka shift baru otomatis menyelesaikan shift lama yang belum ditutup', () {
+      final notifier = AppStateNotifier();
+      notifier.setRole(AppRole.kasir);
+
+      // Shift 1 dibuka pada modal 500k
+      notifier.openShift(500000);
+      final shift1Id = notifier.state.activeCashierShift!.id;
+      expect(notifier.state.shifts.where((s) => s.status == ShiftStatus.sedangBerjalan).length, 1);
+
+      // Shift 2 dibuka pada modal 300k tanpa menutup shift 1
+      notifier.openShift(300000);
+      final shift2Id = notifier.state.activeCashierShift!.id;
+
+      // Hanya boleh ada 1 shift aktif berjalan untuk kasir tersebut!
+      final activeShifts = notifier.state.shifts.where((s) => s.status == ShiftStatus.sedangBerjalan).toList();
+      expect(activeShifts.length, 1);
+      expect(activeShifts.first.id, shift2Id);
+      expect(activeShifts.first.initialCash, 300000);
+
+      // Shift 1 otomatis selesai
+      final shift1 = notifier.state.shifts.firstWhere((s) => s.id == shift1Id);
+      expect(shift1.status, ShiftStatus.selesai);
+      expect(shift1.discrepancyNote, contains('Ditutup otomatis'));
+    });
+
+    test('8. Owner dapat menutup paksa shift kasir yang aktif menggunakan closeShiftById', () {
+      final notifier = AppStateNotifier();
+      // Buka shift sebagai kasir
+      notifier.setRole(AppRole.kasir);
+      notifier.openShift(250000);
+      final shiftId = notifier.state.activeCashierShift!.id;
+
+      // Owner memeriksa sistem dan menutup paksa shift
+      notifier.setRole(AppRole.admin);
+      notifier.closeShiftById(
+        shiftId: shiftId,
+        actualCash: 250000,
+        discrepancyNote: 'Ditutup oleh Owner',
+      );
+
+      final auditedShift = notifier.state.shifts.firstWhere((s) => s.id == shiftId);
+      expect(auditedShift.status, ShiftStatus.selesai);
+      expect(auditedShift.actualCash, 250000);
+      expect(auditedShift.discrepancyNote, 'Ditutup oleh Owner');
+    });
   });
 }

@@ -26,6 +26,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
     'Jatuh Tempo Hari Ini',
     'Terlambat',
     'Selesai',
+    'Dibatalkan',
   ];
 
   @override
@@ -56,6 +57,8 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
           return r.isOverdue;
         case 4: // Selesai
           return r.status == RentalStatus.selesai;
+        case 5: // Dibatalkan
+          return r.status == RentalStatus.dibatalkan;
         default:
           return true;
       }
@@ -359,6 +362,58 @@ class _RentalCard extends ConsumerWidget {
 
                     if (isReturnable) ...[
                       const SizedBox(width: 4),
+                      if (appState.currentRole == AppRole.admin) ...[
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.danger,
+                            side: const BorderSide(color: AppColors.danger),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          ),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                title: const Row(
+                                  children: [
+                                    Icon(Icons.cancel_outlined, color: AppColors.danger),
+                                    SizedBox(width: 8),
+                                    Text('Batalkan Transaksi?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ],
+                                ),
+                                content: Text(
+                                  'Apakah Anda yakin ingin membatalkan transaksi #${rental.rentalNumber}?\n\nSemua stok barang yang disewa (${rental.items.map((i) => '${i.nameSnapshot} x${i.qty}').join(', ')}) akan dikembalikan otomatis ke stok tersedia di Supabase.',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                actions: [
+                                  OutlinedButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Tutup'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      final success = ref.read(appStateProvider.notifier).cancelRental(rental.id);
+                                      if (success) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: AppColors.danger,
+                                            content: Text('Transaksi #${rental.rentalNumber} berhasil dibatalkan dan stok telah dipulihkan.'),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: const Text('Batalkan Transaksi'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: const Text('Batalkan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: rental.isOverdue ? AppColors.danger : AppColors.primary,

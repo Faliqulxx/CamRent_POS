@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:camprent_pos/data/models/rental_model.dart';
+import 'package:camprent_pos/data/models/customer_model.dart';
 import 'package:camprent_pos/domain/calculator.dart';
 import 'package:camprent_pos/presentation/state/app_state.dart';
 
@@ -37,7 +38,36 @@ void main() {
       notifier.setRole(AppRole.kasir);
       notifier.openShift(200000);
 
-      final activeRental = notifier.state.rentals.first;
+      final now = DateTime.now();
+      final testRental = RentalModel(
+        id: 'rnt_test_001',
+        rentalNumber: 'RNT-TEST-001',
+        customer: const CustomerModel(id: 'c1', name: 'Test Cust', phone: '081'),
+        cashierName: 'Kasir Test',
+        pickupDate: now.subtract(const Duration(days: 2)),
+        scheduledReturnDate: now,
+        durationDays: 2,
+        subtotal: 150000,
+        totalSewa: 150000,
+        dpPaid: 75000,
+        status: RentalStatus.aktif,
+        items: const [
+          RentalItemModel(
+            id: 'ri_test_001',
+            itemId: 'itm_001',
+            nameSnapshot: 'Tenda 4P',
+            priceSnapshot: 75000,
+            replacementPriceSnapshot: 650000,
+            qty: 1,
+          ),
+        ],
+      );
+
+      notifier.state = notifier.state.copyWith(
+        rentals: [testRental],
+      );
+
+      final activeRental = testRental;
       final settlement = RentalCalculationEngine.calculateSettlement(
         remainingRentalFee: 75000,
         totalFines: 0,

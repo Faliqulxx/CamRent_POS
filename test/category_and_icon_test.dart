@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:camprent_pos/presentation/state/app_state.dart';
 import 'package:camprent_pos/data/models/item_model.dart';
+import 'package:camprent_pos/data/models/customer_model.dart';
+import 'package:camprent_pos/data/models/rental_model.dart';
 
 void main() {
   group('Product Catalog, Category & Size Variant Tests', () {
@@ -127,13 +129,50 @@ void main() {
     });
 
     test('Cannot delete product if it is in an active rental', () {
-      // Find an item currently in an active rental
-      final activeRental = notifier.state.rentals.first;
-      final rentedItemId = activeRental.items.first.itemId;
+      final now = DateTime.now();
+      const testItem = ItemModel(
+        id: 'itm_test_rental',
+        categoryId: 'cat_tenda',
+        name: 'Tenda Sewa Aktif',
+        dailyPrice: 50000,
+        replacementPrice: 500000,
+        totalStock: 2,
+        rentedStock: 1,
+        damagedStock: 0,
+        minimumStock: 1,
+      );
+      final testRental = RentalModel(
+        id: 'rnt_test_001',
+        rentalNumber: 'RNT-TEST-001',
+        customer: const CustomerModel(id: 'c1', name: 'Test Cust', phone: '081'),
+        cashierName: 'Kasir Test',
+        pickupDate: now.subtract(const Duration(days: 2)),
+        scheduledReturnDate: now.add(const Duration(days: 2)),
+        durationDays: 4,
+        subtotal: 200000,
+        totalSewa: 200000,
+        dpPaid: 100000,
+        status: RentalStatus.aktif,
+        items: const [
+          RentalItemModel(
+            id: 'ri_test_001',
+            itemId: 'itm_test_rental',
+            nameSnapshot: 'Tenda Sewa Aktif',
+            priceSnapshot: 50000,
+            replacementPriceSnapshot: 500000,
+            qty: 1,
+          ),
+        ],
+      );
 
-      final result = notifier.deleteItem(rentedItemId);
+      notifier.addItem(testItem);
+      notifier.state = notifier.state.copyWith(
+        rentals: [testRental],
+      );
+
+      final result = notifier.deleteItem(testItem.id);
       expect(result, isFalse);
-      expect(notifier.state.items.any((it) => it.id == rentedItemId), isTrue);
+      expect(notifier.state.items.any((it) => it.id == testItem.id), isTrue);
     });
 
     test('Cart correctly supports adding items with specific size variants', () {

@@ -382,6 +382,9 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 
   void _confirmLogout(BuildContext context) {
+    final appState = ref.read(appStateProvider);
+    final hasActiveShift = appState.currentRole != AppRole.admin && appState.activeCashierShift != null;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -393,9 +396,11 @@ class _MainShellState extends ConsumerState<MainShell> {
             Text('Konfirmasi Keluar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
-        content: const Text(
-          'Apakah Anda yakin ingin keluar dari akun saat ini? Sesi Anda akan diakhiri dan kembali ke halaman login.',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        content: Text(
+          hasActiveShift
+              ? 'PERHATIAN: Shift kasir Anda saat ini masih aktif!\n\nDisarankan untuk menekan "Tutup Shift" terlebih dahulu di menu Kasir agar rekonsiliasi kas tercatat rapi.\n\nApakah Anda tetap ingin logout?'
+              : 'Apakah Anda yakin ingin keluar dari akun saat ini? Sesi Anda akan diakhiri dan kembali ke halaman login.',
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(

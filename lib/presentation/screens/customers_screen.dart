@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camprent_pos/core/theme/app_theme.dart';
+import 'package:camprent_pos/data/models/customer_model.dart';
+import 'package:camprent_pos/data/models/rental_model.dart';
 import 'package:camprent_pos/presentation/state/app_state.dart';
 import 'package:camprent_pos/presentation/widgets/status_pill.dart';
 import 'package:camprent_pos/presentation/widgets/customer_selector_dialog.dart';
@@ -68,6 +70,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (ctx, idx) {
                 final c = filtered[idx];
+                final customerRentals = appState.rentals.where((r) => r.customer.id == c.id).toList();
+
                 return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(14),
@@ -79,7 +83,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                             CircleAvatar(
                               backgroundColor: c.isBlacklisted ? AppColors.danger : AppColors.primary,
                               child: Text(
-                                c.name[0],
+                                c.name.isNotEmpty ? c.name[0] : '?',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -118,7 +122,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                '${c.totalRentals}x Sewa',
+                                '${customerRentals.length}x Sewa',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.textPrimary),
                               ),
                             ),
@@ -129,7 +133,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           if (c.address.isNotEmpty)
                             Text('Alamat: ${c.address}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                           if (c.note.isNotEmpty)
-                            Text('Catatan: ${c.note}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            Text('Catatan / NIK: ${c.note}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                         ],
                         if (c.isBlacklisted && c.blacklistReason != null) ...[
                           const SizedBox(height: 8),
@@ -178,6 +182,65 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                       );
                                 },
                               ),
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                icon: const Icon(Icons.history_outlined, size: 16, color: AppColors.primary),
+                                label: const Text('Riwayat', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
+                                onPressed: () {
+                                  _showCustomerHistoryDialog(context, c, customerRentals);
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                                tooltip: 'Hapus Pelanggan',
+                                onPressed: () {
+                                  final hasActive = customerRentals.any((r) => r.status == RentalStatus.aktif || r.status == RentalStatus.dikembalikanSebagian);
+                                  if (hasActive) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        backgroundColor: Colors.red,
+                                        content: Text('Pelanggan ini sedang memiliki transaksi rental aktif dan tidak dapat dihapus.'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      title: const Text('Hapus Pelanggan?'),
+                                      content: Text(
+                                        'Yakin ingin menghapus data pelanggan "${c.name}"?\nData pelanggan akan dihapus secara permanen dari Supabase.',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                      actions: [
+                                        OutlinedButton(
+                                          onPressed: () => Navigator.pop(ctx),
+                                          child: const Text('Batal'),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                          onPressed: () {
+                                            Navigator.pop(ctx);
+                                            final ok = ref.read(appStateProvider.notifier).deleteCustomer(c.id);
+                                            if (ok) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  backgroundColor: AppColors.danger,
+                                                  content: Text('Pelanggan "${c.name}" berhasil dihapus.'),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          child: const Text('Hapus'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ],
@@ -187,6 +250,70 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomerHistoryDialog(BuildContext context, CustomerModel customer, List<RentalModel> rentals) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.receipt_long, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Riwayat Transaksi: ${customer.name}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: rentals.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text('Belum ada riwayat transaksi sewa.', style: TextStyle(color: AppColors.textSecondary)),
+                  ),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: rentals.length,
+                  separatorBuilder: (_, __) => const Divider(height: 12),
+                  itemBuilder: (_, i) {
+                    final r = rentals[i];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Row(
+                        children: [
+                          Text(r.rentalNumber, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(width: 8),
+                          StatusPill.fromRental(r),
+                        ],
+                      ),
+                      subtitle: Text(
+                        '${r.durationDays} hari • ${r.items.map((it) => "${it.nameSnapshot} x${it.qty}").join(", ")}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      trailing: Text(
+                        'Rp ${r.totalSewa}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
           ),
         ],
       ),

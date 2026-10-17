@@ -33,6 +33,7 @@ class _ReturnInspectionDialogState extends ConsumerState<ReturnInspectionDialog>
   late final TextEditingController _cashPaidCtrl;
   int _cashPaid = 0;
   bool _hasInitializedCashPaid = false;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -621,52 +622,71 @@ class _ReturnInspectionDialogState extends ConsumerState<ReturnInspectionDialog>
                         backgroundColor: AppColors.success,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      icon: const Icon(Icons.check_circle_outline, size: 20),
-                      label: const FittedBox(
+                      icon: _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.check_circle_outline, size: 20),
+                      label: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'Selesaikan & Cetak Struk Pelunasan',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          _isSubmitting ? 'Memproses Pengembalian...' : 'Selesaikan & Cetak Struk Pelunasan',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                       ),
-                      onPressed: () {
-                        if (settlement.remainingToPay > 0 &&
-                            _paymentMethod == PaymentMethod.tunai &&
-                            _cashPaid < settlement.remainingToPay) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Uang tunai yang diterima (${CurrencyFormatter.format(_cashPaid)}) kurang dari sisa tagihan (${CurrencyFormatter.format(settlement.remainingToPay)}).',
-                              ),
-                              backgroundColor: AppColors.danger,
-                              duration: const Duration(seconds: 3),
-                            ),
-                          );
-                          return;
-                        }
+                      onPressed: _isSubmitting
+                          ? null
+                          : () async {
+                              if (settlement.remainingToPay > 0 &&
+                                  _paymentMethod == PaymentMethod.tunai &&
+                                  _cashPaid < settlement.remainingToPay) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Uang tunai yang diterima (${CurrencyFormatter.format(_cashPaid)}) kurang dari sisa tagihan (${CurrencyFormatter.format(settlement.remainingToPay)}).',
+                                    ),
+                                    backgroundColor: AppColors.danger,
+                                    duration: const Duration(seconds: 3),
+                                  ),
+                                );
+                                return;
+                              }
 
-                        final finishedRental = ref.read(appStateProvider.notifier).processReturnSettlement(
-                              rentalId: widget.rental.id,
-                              updatedItems: _inspectedItems,
-                              appliedFees: appliedFees,
-                              settlement: settlement,
-                              paymentMethod: _paymentMethod,
-                              returnCollateralPhysical: _returnCollateral,
-                            );
+                              setState(() => _isSubmitting = true);
+                              try {
+                                final finishedRental = ref.read(appStateProvider.notifier).processReturnSettlement(
+                                      rentalId: widget.rental.id,
+                                      updatedItems: _inspectedItems,
+                                      appliedFees: appliedFees,
+                                      settlement: settlement,
+                                      paymentMethod: _paymentMethod,
+                                      returnCollateralPhysical: _returnCollateral,
+                                    );
 
-                        Navigator.pop(context); // Close inspection dialog
+                                if (mounted) {
+                                  Navigator.pop(context); // Close inspection dialog
+                                }
 
-                        // Tampilkan struk pelunasan
-                        ReceiptPreviewDialog.show(
-                          context,
-                          rental: finishedRental,
-                          settings: appState.settings,
-                          printerConfig: appState.printerConfig,
-                          isReturnReceipt: true,
-                          cashPaid: _paymentMethod == PaymentMethod.tunai ? _cashPaid : null,
-                          cashChange: _paymentMethod == PaymentMethod.tunai ? (_cashPaid - settlement.remainingToPay) : null,
-                        );
-                      },
+                                // Tampilkan struk pelunasan
+                                if (context.mounted) {
+                                  ReceiptPreviewDialog.show(
+                                    context,
+                                    rental: finishedRental,
+                                    settings: appState.settings,
+                                    printerConfig: appState.printerConfig,
+                                    isReturnReceipt: true,
+                                    cashPaid: _paymentMethod == PaymentMethod.tunai ? _cashPaid : null,
+                                    cashChange: _paymentMethod == PaymentMethod.tunai ? (_cashPaid - settlement.remainingToPay) : null,
+                                  );
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _isSubmitting = false);
+                                }
+                              }
+                            },
                     ),
                   ),
                 ],

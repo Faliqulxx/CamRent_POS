@@ -427,6 +427,11 @@ class _PosProductCard extends ConsumerWidget {
 
     final isMobile = MediaQuery.of(context).size.width < 520;
 
+    // Harga Sewa (menyesuaikan durasi sewa yang dipilih di POS jika ada aturan berjenjang)
+    final durationDays = appState.newRentalForm.durationDays;
+    final currentDurationPrice = item.getPriceForDuration(durationDays, isStorePremium: appState.isStorePremium);
+    final hasSpecialDurationRate = durationDays > 1 && currentDurationPrice != item.dailyPrice;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -483,12 +488,28 @@ class _PosProductCard extends ConsumerWidget {
 
           const Spacer(),
 
-          // Harga Sewa / Hari
-          Text(
-            '${CurrencyFormatter.format(item.dailyPrice)} / hari',
-            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: isMobile ? 12 : 13),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // Harga Sewa (menyesuaikan durasi sewa yang dipilih di POS jika ada aturan berjenjang)
+          Row(
+            children: [
+              Text(
+                '${CurrencyFormatter.format(currentDurationPrice)} / hari',
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: isMobile ? 12 : 13),
+              ),
+              if (hasSpecialDurationRate) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Tarif $durationDays hr',
+                    style: TextStyle(fontSize: isMobile ? 8 : 9, color: Colors.amber.shade900, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 4),
 
@@ -515,15 +536,27 @@ class _PosProductCard extends ConsumerWidget {
               ),
             ),
           ] else ...[
-            Text(
-              isOutOfStock ? 'Stok: Habis' : 'Stok: ${item.availableStock} unit',
-              style: TextStyle(
-                fontSize: isMobile ? 10 : 11,
-                color: isOutOfStock ? AppColors.danger : AppColors.textSecondary,
-                fontWeight: isOutOfStock ? FontWeight.bold : FontWeight.normal,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  'Stok: ${item.effectiveTotalStock} • ',
+                  style: TextStyle(fontSize: isMobile ? 10 : 11, color: AppColors.textSecondary),
+                ),
+                Text(
+                  isOutOfStock ? 'Habis' : 'Tersedia: ${item.availableStock}',
+                  style: TextStyle(
+                    fontSize: isMobile ? 10 : 11,
+                    color: isOutOfStock ? AppColors.danger : const Color(0xFF16A34A),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (item.effectiveRentedStock > 0)
+                  Text(
+                    ' (${item.effectiveRentedStock} disewa)',
+                    style: TextStyle(fontSize: isMobile ? 9 : 10, color: const Color(0xFFD97706)),
+                  ),
+              ],
             ),
             const SizedBox(height: 6),
             // Tombol Tambah / Counter untuk produk tanpa ukuran

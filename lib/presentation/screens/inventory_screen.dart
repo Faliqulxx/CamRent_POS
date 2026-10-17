@@ -235,61 +235,105 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
           const SizedBox(height: 10),
 
-          // Harga Sewa / Hari
-          Text(
-            '${CurrencyFormatter.format(item.dailyPrice)} / hari',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: AppColors.primary,
-            ),
+          // Harga Sewa & Aturan Durasi Sewa
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${CurrencyFormatter.format(item.dailyPrice)} / 1 hari',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: AppColors.primary,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.2),
+                  ),
+                ),
+                child: Text(
+                  '2+ hari: ${CurrencyFormatter.format(item.effectivePriceTwoOrMoreDays)}/hr',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 10),
 
-          // Varian Ukuran & Stok
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Varian Ukuran:',
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      variantText,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
+          // Varian Ukuran jika ada
+          if (item.hasVariants) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Varian Ukuran: ',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    'Stok:',
-                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${item.effectiveTotalStock} unit',
+                Expanded(
+                  child: Text(
+                    variantText,
                     style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
                     ),
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+
+          // Keterangan Rincian Status Stok Barang (Total vs Tersedia vs Sedang Disewa)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStockInfoBadge(
+                  label: 'Total Stok',
+                  value: '${item.effectiveTotalStock}',
+                  color: AppColors.textPrimary,
+                ),
+                Container(width: 1, height: 24, color: Colors.grey.shade300),
+                _buildStockInfoBadge(
+                  label: 'Tersedia',
+                  value: '${item.availableStock}',
+                  color: item.availableStock > 0 ? const Color(0xFF16A34A) : AppColors.danger,
+                ),
+                Container(width: 1, height: 24, color: Colors.grey.shade300),
+                _buildStockInfoBadge(
+                  label: 'Sedang Disewa',
+                  value: '${item.effectiveRentedStock}',
+                  color: item.effectiveRentedStock > 0 ? const Color(0xFFD97706) : AppColors.textSecondary,
+                ),
+                if (item.effectiveDamagedStock > 0) ...[
+                  Container(width: 1, height: 24, color: Colors.grey.shade300),
+                  _buildStockInfoBadge(
+                    label: 'Rusak',
+                    value: '${item.effectiveDamagedStock}',
+                    color: AppColors.danger,
+                  ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
 
           // Detail stok per varian jika ada varian
@@ -307,7 +351,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 runSpacing: 4,
                 children: item.variants.map((v) {
                   return Text(
-                    '${v.size}: ${v.availableStock}/${v.stock} unit',
+                    '${v.size}: ${v.availableStock}/${v.stock} unit (${v.rentedStock} disewa)',
                     style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                   );
                 }).toList(),
@@ -323,21 +367,39 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.swap_horiz, size: 16, color: Color(0xFFD97706)),
+                  label: Text(
+                    item.effectiveRentedStock > 0
+                        ? 'Atur Stok (${item.effectiveRentedStock} disewa)'
+                        : 'Atur Stok',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFD97706)),
+                  ),
+                  onPressed: () => _showStockAdjustmentDialog(context, item),
+                ),
+                const SizedBox(width: 4),
+                const Text('|', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const SizedBox(width: 4),
                 TextButton(
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: () => ItemFormDialog.show(context, itemToEdit: item),
                   child: const Text('Edit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 const Text('|', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 TextButton(
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -422,6 +484,345 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStockInfoBadge({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showStockAdjustmentDialog(BuildContext context, ItemModel initialItem) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final appState = ref.watch(appStateProvider);
+            final currentItem = appState.items.where((it) => it.id == initialItem.id).firstOrNull ?? initialItem;
+            final notifier = ref.read(appStateProvider.notifier);
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                width: 500,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.swap_horiz, color: Color(0xFFD97706), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'ATUR & KEMBALIKAN STOK',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                currentItem.name,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Ringkasan Status Stok Saat Ini
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStockInfoBadge(
+                            label: 'Total Stok',
+                            value: '${currentItem.effectiveTotalStock}',
+                            color: AppColors.textPrimary,
+                          ),
+                          Container(width: 1, height: 26, color: Colors.grey.shade300),
+                          _buildStockInfoBadge(
+                            label: 'Sedang Disewa',
+                            value: '${currentItem.effectiveRentedStock}',
+                            color: currentItem.effectiveRentedStock > 0 ? const Color(0xFFD97706) : AppColors.textSecondary,
+                          ),
+                          Container(width: 1, height: 26, color: Colors.grey.shade300),
+                          _buildStockInfoBadge(
+                            label: 'Tersedia',
+                            value: '${currentItem.availableStock}',
+                            color: currentItem.availableStock > 0 ? const Color(0xFF16A34A) : AppColors.danger,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (!currentItem.hasVariants) ...[
+                      // PRODUK TANPA VARIAN
+                      if (currentItem.rentedStock > 0) ...[
+                        Text(
+                          'Terdapat ${currentItem.rentedStock} unit barang yang tercatat sedang disewa.',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 12),
+                        // Tombol Aksi Cepat: Kembalikan Semua
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.assignment_turned_in, size: 18),
+                            label: Text(
+                              'Kembalikan Semua (${currentItem.rentedStock} unit) ke Tersedia',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            onPressed: () {
+                              notifier.returnRentedStockManually(
+                                itemId: currentItem.id,
+                                returnQty: currentItem.rentedStock,
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Semua ${currentItem.rentedStock} unit "${currentItem.name}" berhasil dikembalikan ke status Tersedia!'),
+                                  backgroundColor: const Color(0xFF16A34A),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Kembalikan 1 unit
+                        if (currentItem.rentedStock > 1)
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 11),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.undo, size: 16),
+                              label: const Text('Kembalikan 1 Unit ke Tersedia', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              onPressed: () {
+                                notifier.returnRentedStockManually(
+                                  itemId: currentItem.id,
+                                  returnQty: 1,
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('1 unit "${currentItem.name}" berhasil dikembalikan ke status Tersedia!'),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Semua stok (${currentItem.totalStock} unit) saat ini berstatus Tersedia dan siap disewa.',
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF15803D), fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ] else ...[
+                      // PRODUK DENGAN VARIAN UKURAN
+                      if (currentItem.effectiveRentedStock > 0) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.assignment_turned_in, size: 18),
+                            label: Text(
+                              'Kembalikan Semua Stok Sewa (${currentItem.effectiveRentedStock} unit) ke Tersedia',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            onPressed: () {
+                              for (final v in currentItem.variants) {
+                                if (v.rentedStock > 0) {
+                                  notifier.returnRentedStockManually(
+                                    itemId: currentItem.id,
+                                    returnQty: v.rentedStock,
+                                    variantSize: v.size,
+                                  );
+                                }
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Semua stok sewa varian "${currentItem.name}" berhasil dikembalikan ke status Tersedia!'),
+                                  backgroundColor: const Color(0xFF16A34A),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      const Text(
+                        'Daftar Stok Sewa per Ukuran:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 250),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: currentItem.variants.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 6),
+                          itemBuilder: (ctx, vIdx) {
+                            final v = currentItem.variants[vIdx];
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      v.size,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Tersedia: ${v.availableStock}/${v.stock} unit (Disewa: ${v.rentedStock})',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: v.rentedStock > 0 ? const Color(0xFFD97706) : AppColors.textSecondary,
+                                        fontWeight: v.rentedStock > 0 ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ),
+                                  if (v.rentedStock > 0)
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF16A34A),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      onPressed: () {
+                                        notifier.returnRentedStockManually(
+                                          itemId: currentItem.id,
+                                          returnQty: v.rentedStock,
+                                          variantSize: v.size,
+                                        );
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Ukuran ${v.size} (${v.rentedStock} unit) berhasil dikembalikan ke status Tersedia!'),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text('Kembalikan', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    )
+                                  else
+                                    const Text('Lengkap', style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

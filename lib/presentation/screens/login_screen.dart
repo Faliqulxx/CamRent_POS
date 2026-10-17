@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:camprent_pos/core/theme/app_theme.dart';
 import 'package:camprent_pos/presentation/state/app_state.dart';
 
@@ -14,15 +15,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
   bool _obscurePassword = true;
   bool _rememberMe = true;
   bool _isLoading = false;
   String? _errorMessage;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('saved_login_email');
+      if (savedEmail != null && savedEmail.isNotEmpty && mounted) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _rememberMe = true;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _passwordController.text.isEmpty) {
+            _passwordFocusNode.requestFocus();
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveEmailLocally(String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe && email.isNotEmpty) {
+        await prefs.setString('saved_login_email', email);
+      } else if (!_rememberMe) {
+        await prefs.remove('saved_login_email');
+      }
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -43,6 +81,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
+    // Simpan email agar pengguna selanjutnya tinggal memasukkan kata sandi
+    await _saveEmailLocally(email);
+
     final success = await ref.read(appStateProvider.notifier).login(
           email: email,
           password: password,
@@ -54,7 +95,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       if (!success) {
         setState(() {
-          _errorMessage = 'Email atau kata sandi tidak valid. Pastikan akun terdaftar di Supabase atau gunakan demo.';
+          _errorMessage = ref.read(appStateProvider.notifier).lastAuthError ??
+              'Email atau kata sandi tidak valid. Silakan periksa kembali email dan kata sandi Anda.';
         });
       }
     }
@@ -216,15 +258,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             phone: phoneCtrl.text.trim(),
                           );
 
-                      if (ctx.mounted) {
-                        if (success) {
-                          Navigator.pop(ctx);
-                        } else {
-                          setDialogState(() {
-                            isRegLoading = false;
-                            regError = 'Gagal mendaftarkan toko. Periksa koneksi internet atau gunakan email lain.';
+                      final regEmail = emailCtrl.text.trim();
+                      if (success) {
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('saved_login_email', regEmail);
+                        } catch (_) {}
+                      }
+
+                      if (!ctx.mounted) return;
+
+                      if (success) {
+                        if (mounted) {
+                          setState(() {
+                            _emailController.text = regEmail;
+                            _rememberMe = true;
                           });
                         }
+                        Navigator.pop(ctx);
+                      } else {
+                        setDialogState(() {
+                          isRegLoading = false;
+                          regError = 'Gagal mendaftarkan toko. Periksa koneksi internet atau gunakan email lain.';
+                        });
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -444,6 +500,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _passwordController,
+                          focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _handleLogin(),
@@ -480,43 +537,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 10),
-
-                        // Quick demo buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {
-                                  _emailController.text = 'owner@camprent.com';
-                                  _passwordController.text = 'admin123';
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: const Text('Isi Demo Owner', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {
-                                  _emailController.text = 'kasir@camprent.com';
-                                  _passwordController.text = 'kasir123';
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: const Text('Isi Demo Kasir', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 14),
 
                         // Remember Me Checkbox
                         Row(
@@ -528,13 +549,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 value: _rememberMe,
                                 activeColor: AppColors.primary,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                onChanged: (v) => setState(() => _rememberMe = v ?? true),
+                                onChanged: (v) {
+                                  final newVal = v ?? true;
+                                  setState(() => _rememberMe = newVal);
+                                  if (!newVal) {
+                                    SharedPreferences.getInstance().then((p) => p.remove('saved_login_email'));
+                                  } else if (_emailController.text.trim().isNotEmpty) {
+                                    SharedPreferences.getInstance().then((p) => p.setString('saved_login_email', _emailController.text.trim()));
+                                  }
+                                },
                               ),
                             ),
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
-                                'Simpan sesi login offline di perangkat ini',
+                                'Ingat email/username di perangkat ini',
                                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                               ),
                             ),

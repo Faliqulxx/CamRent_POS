@@ -89,6 +89,7 @@ CREATE TABLE stores (
     late_grace_period_days INT NOT NULL DEFAULT 0,
     default_deposit_amount NUMERIC NOT NULL DEFAULT 50000,
     min_deposit_amount NUMERIC NOT NULL DEFAULT 0,
+    is_premium BOOLEAN NOT NULL DEFAULT FALSE,
     receipt_footer_note TEXT DEFAULT 'Terima kasih atas kunjungan Anda. Harap kembalikan alat tepat waktu & bersih.',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -127,10 +128,14 @@ CREATE TABLE items (
     category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     daily_price NUMERIC NOT NULL,
+    replacement_price NUMERIC DEFAULT 0,
     total_stock INT NOT NULL DEFAULT 0,
     available_stock INT NOT NULL DEFAULT 0,
+    rented_stock INT NOT NULL DEFAULT 0,
     unit TEXT NOT NULL DEFAULT 'Unit',
     has_size_variants BOOLEAN NOT NULL DEFAULT FALSE,
+    duration_pricing JSONB DEFAULT '[]'::jsonb,
+    description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -140,7 +145,9 @@ CREATE TABLE item_size_variants (
     item_id UUID NOT NULL REFERENCES items(id) ON DELETE CASCADE,
     size TEXT NOT NULL,
     total_stock INT NOT NULL DEFAULT 0,
-    available_stock INT NOT NULL DEFAULT 0
+    available_stock INT NOT NULL DEFAULT 0,
+    rented_stock INT NOT NULL DEFAULT 0,
+    daily_price NUMERIC
 );
 
 -- ============================================================================
@@ -276,6 +283,236 @@ CREATE POLICY "store_isolation_rental_items" ON rental_items
         rental_id IN (SELECT id FROM rentals WHERE store_id = get_user_store_id())
     );
 ```
+
+---
+
+### Migrasi Tambahan (Jalankan Jika Database Sudah Pernah Dibuat Sebelumnya)
+
+Jika Anda sudah pernah menjalankan skrip di atas sebelumnya pada Supabase Anda, cukup jalankan query migrasi cepat berikut di **SQL Editor** agar tabel `items` dan `item_size_variants` mendukung fitur aturan harga durasi sewa berjenjang (`duration_pricing`) dan rincian stok (`rented_stock`):
+
+```sql
+-- Tambah kolom status premium ke tabel stores
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Tambah kolom aturan durasi sewa, stok sewa, harga ganti, & deskripsi ke tabel items
+ALTER TABLE items ADD COLUMN IF NOT EXISTS duration_pricing JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS price_two_or_more_days NUMERIC;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS rented_stock INT NOT NULL DEFAULT 0;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS replacement_price NUMERIC DEFAULT 0;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- Tambah kolom stok sewa & harga kustom ke tabel varian ukuran
+ALTER TABLE item_size_variants ADD COLUMN IF NOT EXISTS rented_stock INT NOT NULL DEFAULT 0;
+ALTER TABLE item_size_variants ADD COLUMN IF NOT EXISTS daily_price NUMERIC;
+
+-- ============================================================================
+-- INTEGRITAS SHIFT KASIR (Pembersihan Shift Menggantung & Larangan Shift Ganda)
+-- ============================================================================
+-- 1. Tutup otomatis shift lama yang masih berstatus 'open' jika ada shift yang lebih baru per kasir
+UPDATE shifts
+SET status = 'closed',
+    end_time = NOW(),
+    notes = 'Ditutup otomatis oleh sistem saat migrasi'
+WHERE status = 'open'
+  AND id NOT IN (
+    SELECT DISTINCT ON (store_id, cashier_name) id
+    FROM shifts
+    WHERE status = 'open'
+    ORDER BY store_id, cashier_name, start_time DESC
+  );
+
+-- 2. Cegah shift ganda pada level database (hanya boleh 1 shift open per kasir di satu toko)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_single_active_shift_per_cashier
+ON shifts (store_id, cashier_name)
+WHERE status = 'open';
+
+-- ============================================================================
+-- FUNGSI LOGIKA HARGA TIERING DURASI RENTAL (Highest Active Pricing Tier)
+-- ============================================================================
+-- Format elemen JSONB duration_pricing:
+-- [
+--   {"days": 1, "price_per_day": 35000, "is_active": true, "is_premium": false},
+--   {"days": 2, "price_per_day": 20000, "is_active": true, "is_premium": false},
+--   {"days": 7, "price_per_day": 10000, "is_active": true, "is_premium": true}
+-- ]
+
+CREATE OR REPLACE FUNCTION get_item_duration_price(
+    p_item_id UUID,
+    p_days INT,
+    p_is_store_premium BOOLEAN DEFAULT FALSE
+)
+RETURNS NUMERIC AS $$
+DECLARE
+    v_base_price NUMERIC;
+    v_pricing JSONB;
+    v_matched_price NUMERIC;
+BEGIN
+    SELECT daily_price, duration_pricing INTO v_base_price, v_pricing
+    FROM items
+    WHERE id = p_item_id;
+
+    IF NOT FOUND THEN
+        RETURN 0;
+    END IF;
+
+    -- Cari tier aktif dengan threshold hari terbesar (days <= p_days)
+    -- Rule premium hanya berlaku jika p_is_store_premium = TRUE
+    SELECT (elem->>'price_per_day')::NUMERIC INTO v_matched_price
+    FROM jsonb_array_elements(COALESCE(v_pricing, '[]'::jsonb)) AS elem
+    WHERE (COALESCE(elem->>'is_active', 'true'))::BOOLEAN = TRUE
+      AND ((COALESCE(elem->>'is_premium', 'false'))::BOOLEAN = FALSE OR p_is_store_premium = TRUE)
+      AND (elem->>'days')::INT <= GREATEST(p_days, 1)
+    ORDER BY (elem->>'days')::INT DESC
+    LIMIT 1;
+
+    RETURN COALESCE(v_matched_price, v_base_price);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ============================================================================
+-- FUNGSI: Pendaftaran & Pembaruan Kredensial Akun Kasir oleh Owner
+-- ============================================================================
+-- Fungsi ini memungkinkan Owner mendaftarkan email & password kasir secara instan,
+-- otomatis aktif (email terkonfirmasi), dan terhubung ke toko Owner.
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE OR REPLACE FUNCTION set_cashier_credentials(
+    p_store_id UUID,
+    p_name TEXT,
+    p_email TEXT,
+    p_password TEXT
+) RETURNS JSONB AS $$
+DECLARE
+    v_user_id UUID;
+    v_caller_role app_role;
+    v_caller_store_id UUID;
+    v_clean_email TEXT;
+BEGIN
+    v_clean_email := LOWER(TRIM(p_email));
+
+    -- 1. Verifikasi bahwa pemanggil adalah Owner dari toko yang bersangkutan
+    SELECT role, store_id INTO v_caller_role, v_caller_store_id 
+    FROM profiles WHERE id = auth.uid();
+
+    IF v_caller_role IS NULL OR v_caller_role != 'owner' OR v_caller_store_id != p_store_id THEN
+        RAISE EXCEPTION 'Akses ditolak: Hanya Owner toko yang dapat mengatur akun kasir.';
+    END IF;
+
+    -- 2. Cek apakah user sudah terdaftar di auth.users
+    SELECT id INTO v_user_id FROM auth.users WHERE LOWER(email) = v_clean_email;
+
+    IF v_user_id IS NOT NULL THEN
+        -- Akun sudah ada: perbarui password jika diisi
+        IF p_password IS NOT NULL AND length(trim(p_password)) >= 6 THEN
+            UPDATE auth.users 
+            SET encrypted_password = crypt(trim(p_password), gen_salt('bf')),
+                email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+                raw_user_meta_data = jsonb_build_object('name', p_name, 'role', 'cashier'),
+                confirmation_token = COALESCE(confirmation_token, ''),
+                recovery_token = COALESCE(recovery_token, ''),
+                email_change_token_new = COALESCE(email_change_token_new, ''),
+                updated_at = NOW()
+            WHERE id = v_user_id;
+
+            -- Pastikan auth.identities ada
+            INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+            VALUES (v_user_id, v_user_id, jsonb_build_object('sub', v_user_id::text, 'email', v_clean_email), 'email', v_user_id::text, NOW(), NOW(), NOW())
+            ON CONFLICT (provider, provider_id) DO NOTHING;
+        END IF;
+    ELSE
+        -- Akun baru: wajib memiliki password minimal 6 karakter
+        IF p_password IS NULL OR length(trim(p_password)) < 6 THEN
+            RAISE EXCEPTION 'Password akun kasir baru minimal 6 karakter.';
+        END IF;
+
+        v_user_id := gen_random_uuid();
+        INSERT INTO auth.users (
+            id,
+            instance_id,
+            aud,
+            role,
+            email,
+            encrypted_password,
+            email_confirmed_at,
+            raw_app_meta_data,
+            raw_user_meta_data,
+            confirmation_token,
+            recovery_token,
+            email_change_token_new,
+            email_change,
+            phone_change,
+            phone_change_token,
+            reauthentication_token,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_user_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            v_clean_email,
+            crypt(trim(p_password), gen_salt('bf')),
+            NOW(),
+            jsonb_build_object('provider', 'email', 'providers', array['email']),
+            jsonb_build_object('name', p_name, 'role', 'cashier'),
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            NOW(),
+            NOW()
+        );
+
+        -- Tambahkan ke auth.identities agar provider 'email' terdaftar resmi di GoTrue
+        INSERT INTO auth.identities (
+            id,
+            user_id,
+            identity_data,
+            provider,
+            provider_id,
+            last_sign_in_at,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_user_id,
+            v_user_id,
+            jsonb_build_object('sub', v_user_id::text, 'email', v_clean_email),
+            'email',
+            v_user_id::text,
+            NOW(),
+            NOW(),
+            NOW()
+        );
+    END IF;
+
+    -- 3. Simpan atau perbarui data di tabel profil publik
+    INSERT INTO profiles (id, store_id, role, name, email, is_active)
+    VALUES (v_user_id, p_store_id, 'cashier', p_name, v_clean_email, TRUE)
+    ON CONFLICT (id) DO UPDATE 
+    SET name = p_name, email = v_clean_email, is_active = TRUE;
+
+    RETURN jsonb_build_object('success', TRUE, 'user_id', v_user_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- (Opsional) Fungsi SQL untuk Menghapus Akun Kasir Bersih (dari profiles dan auth.users)
+CREATE OR REPLACE FUNCTION delete_cashier_account(p_cashier_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+    DELETE FROM public.profiles WHERE id = p_cashier_id AND role = 'cashier';
+    DELETE FROM auth.identities WHERE user_id = p_cashier_id;
+    DELETE FROM auth.users WHERE id = p_cashier_id;
+    RETURN TRUE;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
 
 ---
 

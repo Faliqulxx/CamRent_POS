@@ -40,11 +40,51 @@ class CampRentApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appState = ref.watch(appStateProvider);
 
+    Widget homeWidget;
+    if (appState.isInitializingAuth) {
+      homeWidget = const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.terrain_rounded, size: 64, color: AppColors.primary),
+              SizedBox(height: 16),
+              Text(
+                'CampRent POS',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Memeriksa sesi otentikasi Supabase...',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              SizedBox(height: 24),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (appState.isLoggedIn) {
+      homeWidget = const MainShell();
+    } else {
+      homeWidget = const LoginScreen();
+    }
+
     return MaterialApp(
       title: 'CampRent POS',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: appState.isLoggedIn ? const MainShell() : const LoginScreen(),
+      home: homeWidget,
     );
   }
 }

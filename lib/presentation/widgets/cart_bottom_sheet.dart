@@ -30,6 +30,7 @@ class _CartBottomSheetState extends ConsumerState<CartBottomSheet> {
   final TextEditingController _depositCtrl = TextEditingController();
   final TextEditingController _discountCtrl = TextEditingController();
   final TextEditingController _cashPaidCtrl = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -347,7 +348,8 @@ class _CartBottomSheetState extends ConsumerState<CartBottomSheet> {
                             separatorBuilder: (_, __) => const Divider(height: 16),
                             itemBuilder: (ctx, idx) {
                               final ci = form.cartItems[idx];
-                              int price = ci.item.dailyPrice;
+                              final isStorePremium = ref.watch(appStateProvider).isStorePremium;
+                              int price = ci.item.getPriceForDuration(form.durationDays, isStorePremium: isStorePremium);
                               int maxAvailable = ci.item.availableStock;
                               if (ci.selectedSize != null && ci.item.hasVariants) {
                                 final v = ci.item.variants.where((v) => v.size == ci.selectedSize).firstOrNull;
@@ -825,30 +827,46 @@ class _CartBottomSheetState extends ConsumerState<CartBottomSheet> {
                       backgroundColor: form.isValidToSubmit ? AppColors.primary : AppColors.textMuted,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    icon: const Icon(Icons.print_rounded, size: 20),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.print_rounded, size: 20),
                     label: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        form.paymentMethod == PaymentMethod.tunai && form.cashChange < 0
-                            ? 'Uang Kurang (${CurrencyFormatter.format(form.cashChange)})'
-                            : 'Simpan & Cetak Struk',
+                        _isSubmitting
+                            ? 'Menyimpan Transaksi...'
+                            : form.paymentMethod == PaymentMethod.tunai && form.cashChange < 0
+                                ? 'Uang Kurang (${CurrencyFormatter.format(form.cashChange)})'
+                                : 'Simpan & Cetak Struk',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ),
-                    onPressed: !form.isValidToSubmit
+                    onPressed: (!form.isValidToSubmit || _isSubmitting)
                         ? null
-                        : () {
-                            final savedRental = ref.read(appStateProvider.notifier).submitNewRental();
-                            Navigator.pop(context); // Close bottom sheet
+                        : () async {
+                            setState(() => _isSubmitting = true);
+                            try {
+                              final savedRental = ref.read(appStateProvider.notifier).submitNewRental();
+                              if (mounted) {
+                                Navigator.pop(context); // Close bottom sheet
+                              }
 
-                            if (savedRental != null) {
-                              // Tampilkan dialog cetak struk otomatis
-                              ReceiptPreviewDialog.show(
-                                context,
-                                rental: savedRental,
-                                settings: appState.settings,
-                                printerConfig: appState.printerConfig,
-                              );
+                              if (savedRental != null && context.mounted) {
+                                ReceiptPreviewDialog.show(
+                                  context,
+                                  rental: savedRental,
+                                  settings: appState.settings,
+                                  printerConfig: appState.printerConfig,
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isSubmitting = false);
+                              }
                             }
                           },
                   ),

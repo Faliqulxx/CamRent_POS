@@ -5,6 +5,7 @@ import 'package:camprent_pos/core/utils/currency_formatter.dart';
 import 'package:camprent_pos/data/models/printer_model.dart';
 import 'package:camprent_pos/data/models/settings_model.dart';
 import 'package:camprent_pos/data/models/shift_model.dart';
+import 'package:camprent_pos/data/services/supabase_service.dart';
 import 'package:camprent_pos/presentation/state/app_state.dart';
 import 'package:camprent_pos/presentation/widgets/printer_test_dialog.dart';
 import 'package:camprent_pos/presentation/screens/shift_management_screen.dart';
@@ -49,7 +50,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _defaultDepositAmount = settings.defaultDepositAmount;
     _minDepositAmount = settings.minDepositAmount;
 
-    _cashiersList = List<CashierAccountModel>.from(settings.cashiers);
+    // 1 Toko = Maksimal 1 Akun Kasir Aktif (tanpa dummy template bawaan)
+    _cashiersList = settings.cashiers.isNotEmpty
+        ? [settings.cashiers.first.copyWith(isActive: true)]
+        : <CashierAccountModel>[];
   }
 
   @override
@@ -65,6 +69,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final printer = appState.printerConfig;
     final settings = appState.settings;
     final isAdmin = appState.currentRole == AppRole.admin;
+
+    // Pastikan _cashiersList tersinkron dengan state toko
+    _cashiersList = List<CashierAccountModel>.from(settings.cashiers);
 
     // Guard: Hanya Owner yang berhak membuka menu Pengaturan
     if (!isAdmin) {
@@ -154,6 +161,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: 'Kelola Akun Kasir',
               subtitle: 'Manajemen akses dan kredensial login kasir toko.',
               icon: Icons.people_alt_outlined,
+              action: _cashiersList.isEmpty
+                  ? ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Tambah Kasir', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () => _showCashierDialog(),
+                    )
+                  : null,
             ),
             const SizedBox(height: 10),
             _buildCashiersCard(),
@@ -174,20 +194,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 24),
 
             // ==========================================
-            // BAGIAN 3: MEDIA SOSIAL PADA STRUK — PREMIUM
-            // ==========================================
-            _buildSectionHeader(
-              title: 'Media Sosial pada Struk — Premium',
-              subtitle: 'Tampilkan tautan akun media sosial toko di struk cetak.',
-              icon: Icons.share_outlined,
-            ),
-            const SizedBox(height: 10),
-            _buildSocialMediaCard(),
-
-            const SizedBox(height: 24),
-
-            // ==========================================
-            // BAGIAN 4: PREVIEW STRUK TOKO
+            // BAGIAN 3: PREVIEW STRUK TOKO
             // ==========================================
             _buildSectionHeader(
               title: 'Preview Struk Toko',
@@ -200,7 +207,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 24),
 
             // ==========================================
-            // BAGIAN 5: DESAIN LOGO & FOOTER STRUK THERMAL
+            // BAGIAN 4: DESAIN LOGO & FOOTER STRUK THERMAL
             // ==========================================
             _buildSectionHeader(
               title: 'Desain Logo & Footer Struk Thermal',
@@ -213,7 +220,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 24),
 
             // ==========================================
-            // BAGIAN 6: PENGATURAN KONEKSI PRINTER THERMAL
+            // BAGIAN 5: PENGATURAN KONEKSI PRINTER THERMAL
             // ==========================================
             _buildSectionHeader(
               title: 'Pengaturan Printer Thermal Bluetooth',
@@ -238,9 +245,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String title,
     required String subtitle,
     required IconData icon,
+    Widget? action,
   }) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Icon(icon, color: AppColors.primary, size: 22),
         const SizedBox(width: 8),
@@ -259,6 +267,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
         ),
+        if (action != null) ...[
+          const SizedBox(width: 8),
+          action,
+        ],
       ],
     );
   }
@@ -371,8 +383,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // 1. KELOLA AKUN KASIR CARD
+  // 1. KELOLA AKUN KASIR CARD (1 Kasir per Toko)
   Widget _buildCashiersCard() {
+    if (_cashiersList.isEmpty) {
+      return Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.person_add_alt_1_outlined, size: 32, color: AppColors.primary),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Belum Ada Akun Kasir',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  '1 Toko memiliki 1 akun kasir. Daftarkan nama, email, dan kata sandi login untuk staf kasir Anda.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Tambah Akun Kasir', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  onPressed: () => _showCashierDialog(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final cashier = _cashiersList.first;
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -384,149 +448,107 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ..._cashiersList.asMap().entries.map((entry) {
-              final index = entry.key;
-              final cashier = entry.value;
-              final isEditable = index == 0; // Kasir pertama dapat diedit
-
-              return Container(
-                margin: EdgeInsets.only(bottom: index == _cashiersList.length - 1 ? 0 : 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isEditable ? Colors.white : const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isEditable ? AppColors.border : Colors.grey.shade300,
+            Row(
+              children: [
+                // Inisial Avatar
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: cashier.isActive
+                      ? AppColors.primary.withOpacity(0.12)
+                      : Colors.grey.shade200,
+                  child: Text(
+                    _getInitials(cashier.name),
+                    style: TextStyle(
+                      color: cashier.isActive ? AppColors.primary : Colors.grey.shade600,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
-                child: InkWell(
-                  onTap: isEditable ? null : () => _showPremiumCashierDialog(),
-                  borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 12),
+
+                // Nama & Email
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // Avatar / Inisial
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: cashier.isActive
-                                ? AppColors.primary.withOpacity(0.12)
-                                : Colors.grey.shade200,
+                          Flexible(
                             child: Text(
-                              _getInitials(cashier.name),
-                              style: TextStyle(
-                                color: cashier.isActive ? AppColors.primary : Colors.grey.shade600,
+                              cashier.name,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                                fontSize: 14,
+                                color: AppColors.textPrimary,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 12),
-
-                          // Nama & Email
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        cashier.name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Status Badge
-                                    _buildStatusBadge(cashier.isActive),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  cashier.email,
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Action: Edit (Kasir 1) atau Lock Icon (Kasir 2 & 3)
-                          if (isEditable)
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                side: const BorderSide(color: AppColors.primary),
-                              ),
-                              icon: const Icon(Icons.edit_outlined, size: 15, color: AppColors.primary),
-                              label: const Text(
-                                'Edit',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
-                              ),
-                              onPressed: () => _showEditCashierDialog(cashier, index),
-                            )
-                          else
-                            Tooltip(
-                              message: 'Klik untuk informasi fitur Premium',
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.amber.shade300),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.lock_outline, size: 14, color: Colors.amber.shade900),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Premium',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.amber.shade900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                          const SizedBox(width: 8),
+                          _buildStatusBadge(cashier.isActive),
                         ],
                       ),
-
-                      // Locked accounts notice
-                      if (!isEditable) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 13, color: Colors.amber.shade800),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Pengelolaan akun ini tersedia pada paket Premium',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.amber.shade900,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      const SizedBox(height: 3),
+                      Text(
+                        cashier.email,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
-              );
-            }),
+
+                // Action: Edit
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: const BorderSide(color: AppColors.primary),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 15, color: AppColors.primary),
+                  label: const Text(
+                    'Edit',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                  ),
+                  onPressed: () => _showCashierDialog(cashierToEdit: cashier),
+                ),
+                const SizedBox(width: 8),
+
+                // Action: Hapus
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: BorderSide(color: Colors.red.shade300),
+                    foregroundColor: Colors.red.shade700,
+                  ),
+                  icon: const Icon(Icons.delete_outline, size: 15),
+                  label: const Text('Hapus', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () => _confirmDeleteCashier(cashier),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Toko Anda menggunakan 1 akun kasir. Klik Edit untuk mengubah data login atau Hapus jika ingin mengganti kasir.',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -631,141 +653,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // 3. MEDIA SOSIAL PADA STRUK — PREMIUM CARD
-  Widget _buildSocialMediaCard() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: Icon(Icons.lock_outline, color: Colors.amber.shade900, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Flexible(
-                            child: Text(
-                              'Media Sosial pada Struk',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade100,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.amber.shade400),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.workspace_premium, size: 12, color: Colors.amber.shade900),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'Premium',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Tampilkan media sosial toko pada struk dengan berlangganan paket Premium.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Saluran Media Sosial Toko
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _buildSocialChannelBadge(Icons.camera_alt_outlined, 'Instagram', '@camprent.id'),
-                  _buildSocialChannelBadge(Icons.facebook_outlined, 'Facebook', 'CampRent Outdoor'),
-                  _buildSocialChannelBadge(Icons.video_library_outlined, 'TikTok', '@camprent_official'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Button "Lihat Fitur Premium"
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.amber.shade900,
-                  side: BorderSide(color: Colors.amber.shade400),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: Icon(Icons.star_outline, size: 16, color: Colors.amber.shade900),
-                label: const Text(
-                  'Lihat Fitur Premium',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                onPressed: () => _showSocialMediaPremiumDialog(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialChannelBadge(IconData icon, String name, String handle) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade500),
-        const SizedBox(width: 6),
-        Text(
-          '$name: ',
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.bold),
-        ),
-        Text(
-          handle,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
-        ),
-      ],
-    );
-  }
-
-  // 4. PREVIEW STRUK TOKO CARD
+  // 3. PREVIEW STRUK TOKO CARD
   Widget _buildReceiptPreviewCard(PrinterConfigModel printer, StoreSettingsModel settings) {
     return Card(
       elevation: 0,
@@ -949,53 +837,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     settings.receiptFooter,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontFamily: 'Courier', fontSize: 7, color: Colors.black87),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Area Media Sosial yang Terkunci untuk Non-Premium
-                  InkWell(
-                    onTap: () => _showSocialMediaPremiumDialog(),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.amber.shade300, style: BorderStyle.solid),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.lock_outline, size: 11, color: Colors.amber.shade900),
-                              const SizedBox(width: 4),
-                              Text(
-                                '[ Media Sosial Toko — Fitur Premium ]',
-                                style: TextStyle(
-                                  fontFamily: 'Courier',
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.amber.shade900,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'IG: @camprent.id • TikTok: @camprent',
-                            style: TextStyle(
-                              fontFamily: 'Courier',
-                              fontSize: 7,
-                              fontStyle: FontStyle.italic,
-                              color: Colors.amber.shade900.withOpacity(0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
 
                   // Barcode jika aktif
@@ -1418,24 +1259,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // MODAL DIALOGS
   // ==========================================
 
-  // Dialog: Edit Akun Kasir
-  void _showEditCashierDialog(CashierAccountModel cashier, int index) {
-    final nameCtrl = TextEditingController(text: cashier.name);
-    final emailCtrl = TextEditingController(text: cashier.email);
+  // Dialog: Tambah / Edit Akun Kasir (1 Kasir per Toko)
+  void _showCashierDialog({CashierAccountModel? cashierToEdit}) {
+    final isNewAccount = cashierToEdit == null;
+    final nameCtrl = TextEditingController(text: isNewAccount ? '' : cashierToEdit.name);
+    final emailCtrl = TextEditingController(text: isNewAccount ? '' : cashierToEdit.email);
     final passwordCtrl = TextEditingController();
     bool obscurePassword = true;
     final formKey = GlobalKey<FormState>();
+    bool isSavingCashier = false;
+    String? cashierErrorMsg;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               child: Container(
-                width: 480,
+                width: 460,
                 padding: const EdgeInsets.all(20),
                 child: Form(
                   key: formKey,
@@ -1443,6 +1288,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Header
                       Row(
                         children: [
                           Container(
@@ -1451,39 +1297,72 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               color: AppColors.primary.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.person_outline, color: AppColors.primary, size: 20),
+                            child: Icon(
+                              isNewAccount ? Icons.person_add_alt_1_outlined : Icons.person_outline,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 10),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Edit Akun Kasir',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  isNewAccount ? 'Tambah Akun Kasir' : 'Edit Akun Kasir',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                 ),
                                 Text(
-                                  'Perbarui nama pengguna dan email login kasir',
-                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                  isNewAccount
+                                      ? 'Masukkan nama, email, dan kata sandi login kasir'
+                                      : 'Perbarui nama, email, atau kata sandi login kasir',
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
+                          if (!isSavingCashier)
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 20),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 16),
 
-                      // Nama Pengguna / Username
-                      const Text('Nama Pengguna / Username *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      // Error Banner
+                      if (cashierErrorMsg != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  cashierErrorMsg!,
+                                  style: TextStyle(fontSize: 12, color: Colors.red.shade800),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Nama Pengguna / Nama Kasir
+                      const Text('Nama Kasir *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: nameCtrl,
+                        enabled: !isSavingCashier,
                         decoration: const InputDecoration(
-                          hintText: 'Contoh: Budi Santoso',
+                          hintText: 'Masukkan nama kasir (contoh: Siti Aminah)',
                           isDense: true,
                         ),
                         validator: (val) {
@@ -1494,31 +1373,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 14),
 
                       // Email untuk Login
-                      const Text('Email Login *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      const Text('Email Login Kasir *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: emailCtrl,
+                        enabled: !isSavingCashier,
                         keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
-                          hintText: 'Contoh: budi.kasir@camprent.com',
+                          hintText: 'Masukkan email kasir (contoh: kasir@camprent.com)',
                           isDense: true,
                         ),
                         validator: (val) {
                           if (val == null || val.trim().isEmpty) return 'Email wajib diisi';
-                          if (!val.contains('@')) return 'Format email tidak valid';
+                          if (!val.contains('@') || !val.contains('.')) return 'Format email tidak valid';
                           return null;
                         },
                       ),
                       const SizedBox(height: 14),
 
-                      // Password Baru (Opsional)
-                      const Text('Password Baru (Opsional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      // Password
+                      Text(
+                        isNewAccount ? 'Kata Sandi Login Kasir *' : 'Kata Sandi Baru (Opsional)',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: passwordCtrl,
+                        enabled: !isSavingCashier,
                         obscureText: obscurePassword,
                         decoration: InputDecoration(
-                          hintText: 'Kosongkan jika tidak ingin mengubah password',
+                          hintText: isNewAccount
+                              ? 'Minimal 6 karakter'
+                              : 'Kosongkan jika tidak ingin mengubah kata sandi',
                           isDense: true,
                           suffixIcon: IconButton(
                             icon: Icon(
@@ -1530,6 +1416,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             },
                           ),
                         ),
+                        validator: (val) {
+                          if (isNewAccount && (val == null || val.trim().isEmpty)) {
+                            return 'Kata sandi wajib diisi untuk akun kasir baru';
+                          }
+                          if (val != null && val.trim().isNotEmpty && val.trim().length < 6) {
+                            return 'Kata sandi minimal 6 karakter';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 20),
 
@@ -1538,7 +1433,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
+                            onPressed: isSavingCashier ? null : () => Navigator.pop(ctx),
                             child: const Text('Batal'),
                           ),
                           const SizedBox(width: 10),
@@ -1547,24 +1442,87 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
                             ),
-                            onPressed: () {
-                              if (formKey.currentState!.validate()) {
-                                setState(() {
-                                  _cashiersList[index] = cashier.copyWith(
-                                    name: nameCtrl.text.trim(),
-                                    email: emailCtrl.text.trim(),
-                                  );
-                                });
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: AppColors.primary,
-                                    content: Text('Akun kasir "${nameCtrl.text.trim()}" berhasil diperbarui.'),
+                            onPressed: isSavingCashier
+                                ? null
+                                : () async {
+                                    if (!formKey.currentState!.validate()) return;
+
+                                    setDialogState(() {
+                                      isSavingCashier = true;
+                                      cashierErrorMsg = null;
+                                    });
+
+                                    final appState = ref.read(appStateProvider);
+                                    final currentStoreId = (appState.storeId != null && appState.storeId!.isNotEmpty)
+                                        ? appState.storeId!
+                                        : appState.settings.storeId;
+
+                                    if (currentStoreId.isEmpty) {
+                                      setDialogState(() {
+                                        isSavingCashier = false;
+                                        cashierErrorMsg = 'ID Toko tidak ditemukan. Silakan login ulang sebagai Owner.';
+                                      });
+                                      return;
+                                    }
+
+                                    final saveRes = await SupabaseService().createOrUpdateCashierAccount(
+                                      storeId: currentStoreId,
+                                      name: nameCtrl.text.trim(),
+                                      email: emailCtrl.text.trim().toLowerCase(),
+                                      password: passwordCtrl.text.trim(),
+                                      existingCashierId: isNewAccount ? null : cashierToEdit.id,
+                                    );
+
+                                    if (!ctx.mounted) return;
+
+                                    if (saveRes['success'] == true) {
+                                      final assignedId = saveRes['id']?.toString() ??
+                                          (isNewAccount ? 'cashier_${DateTime.now().millisecondsSinceEpoch}' : cashierToEdit.id);
+                                      final updatedCashier = CashierAccountModel(
+                                        id: assignedId,
+                                        name: nameCtrl.text.trim(),
+                                        email: emailCtrl.text.trim().toLowerCase(),
+                                        isActive: true,
+                                        createdAt: isNewAccount ? DateTime.now() : cashierToEdit.createdAt,
+                                      );
+
+                                      setState(() {
+                                        _cashiersList = [updatedCashier];
+                                      });
+
+                                      final currentSettings = ref.read(appStateProvider).settings;
+                                      ref.read(appStateProvider.notifier).updateStoreSettings(
+                                            currentSettings.copyWith(cashiers: [updatedCashier]),
+                                          );
+
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          backgroundColor: AppColors.primary,
+                                          duration: const Duration(seconds: 4),
+                                          content: Text(
+                                            'Akun kasir "${nameCtrl.text.trim()}" berhasil disimpan & siap digunakan untuk login!',
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      setDialogState(() {
+                                        isSavingCashier = false;
+                                        cashierErrorMsg = saveRes['message']?.toString() ??
+                                            'Gagal menyimpan akun kasir ke Supabase.';
+                                      });
+                                    }
+                                  },
+                            child: isSavingCashier
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : Text(
+                                    isNewAccount ? 'Tambah Kasir' : 'Simpan Perubahan',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                );
-                              }
-                            },
-                            child: const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -1579,79 +1537,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Dialog: Informasi Akun Kasir Premium
-  void _showPremiumCashierDialog() {
+  // Dialog Konfirmasi Hapus Akun Kasir
+  void _confirmDeleteCashier(CashierAccountModel cashier) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
+        title: const Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.workspace_premium, color: Colors.amber.shade900, size: 20),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Pengelolaan Akun Kasir — Paket Premium',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Hapus Akun Kasir?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Text(
-                'Pengelolaan akun kasir ini tersedia pada paket Premium. Nikmati kemudahan operasional multi-staff tanpa batas kuota.',
-                style: TextStyle(fontSize: 12, color: Colors.amber.shade900, height: 1.4),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text('Keuntungan Paket Premium:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 8),
-            _buildPremiumBenefitRow(Icons.check_circle_outline, 'Tambah akun kasir tanpa batas kuota'),
-            _buildPremiumBenefitRow(Icons.check_circle_outline, 'Pengaturan shift kasir dan audit transaksi mandiri'),
-            _buildPremiumBenefitRow(Icons.check_circle_outline, 'Laporan komisi dan performa harian per staf kasir'),
-            _buildPremiumBenefitRow(Icons.check_circle_outline, 'PIN otorisasi supervisor untuk diskon khusus'),
-          ],
+        content: Text(
+          'Apakah Anda yakin ingin menghapus akun kasir "${cashier.name}" (${cashier.email})?\n\nSetelah dihapus, akun tidak bisa login lagi dan Anda dapat mendaftarkan kasir baru.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
         ),
         actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Mengerti', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                _cashiersList = [];
+              });
+              ref.read(appStateProvider.notifier).removeCashier(cashier.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: Colors.red.shade700,
+                  content: Text('Akun kasir "${cashier.name}" berhasil dihapus.'),
+                ),
+              );
+            },
+            child: const Text('Hapus Kasir', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPremiumBenefitRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 12, color: AppColors.textPrimary))),
         ],
       ),
     );
@@ -1911,25 +1838,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         if (formKey.currentState!.validate()) {
+                          final newName = storeNameCtrl.text.trim();
+                          final newPhone = storePhoneCtrl.text.trim();
+                          final newAddress = storeAddressCtrl.text.trim();
+                          final newMinDp = int.parse(minDpCtrl.text.trim());
+                          final newLateFee = int.parse(lateFeeCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''));
+                          final newGracePeriod = int.parse(gracePeriodCtrl.text.trim());
+                          final newDefDeposit = int.parse(defaultDepositCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''));
+                          final newMinDeposit = int.parse(minDepositCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''));
+
                           setState(() {
-                            _storeName = storeNameCtrl.text.trim();
-                            _storePhone = storePhoneCtrl.text.trim();
-                            _storeAddress = storeAddressCtrl.text.trim();
-                            _minDpPercent = int.parse(minDpCtrl.text.trim());
-                            _lateFeePerDay = int.parse(lateFeeCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''));
-                            _lateGracePeriodDays = int.parse(gracePeriodCtrl.text.trim());
-                            _defaultDepositAmount = int.parse(defaultDepositCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''));
-                            _minDepositAmount = int.parse(minDepositCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''));
+                            _storeName = newName;
+                            _storePhone = newPhone;
+                            _storeAddress = newAddress;
+                            _minDpPercent = newMinDp;
+                            _lateFeePerDay = newLateFee;
+                            _lateGracePeriodDays = newGracePeriod;
+                            _defaultDepositAmount = newDefDeposit;
+                            _minDepositAmount = newMinDeposit;
                           });
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              backgroundColor: AppColors.primary,
-                              content: Text('Pengaturan toko berhasil diperbarui.'),
-                            ),
+
+                          final currentSettings = ref.read(appStateProvider).settings;
+                          final updatedSettings = currentSettings.copyWith(
+                            storeName: newName,
+                            storePhone: newPhone,
+                            storeAddress: newAddress,
+                            minDpPercent: newMinDp,
+                            lateGracePeriodDays: newGracePeriod,
+                            defaultDepositAmount: newDefDeposit,
+                            minDepositAmount: newMinDeposit,
                           );
+
+                          await ref.read(appStateProvider.notifier).updateStoreSettings(
+                                updatedSettings,
+                                lateFeePerDay: newLateFee,
+                              );
+
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                          }
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: AppColors.primary,
+                                content: Text('Pengaturan toko & kebijakan rental berhasil disimpan ke Supabase.'),
+                              ),
+                            );
+                          }
                         }
                       },
                       child: const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1944,113 +1901,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Dialog: Informasi Media Sosial pada Struk (Premium)
-  void _showSocialMediaPremiumDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.share, color: Colors.amber.shade900, size: 20),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Media Sosial pada Struk — Premium',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Text(
-                'Tingkatkan branding dan follower media sosial toko Anda dengan mencantumkan username & tautan akun resmi langsung pada struk cetak kasir.',
-                style: TextStyle(fontSize: 12, color: Colors.amber.shade900, height: 1.4),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text('Kanal Media Sosial yang Didukung:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 8),
 
-            _buildSocialItemSample(Icons.camera_alt_outlined, 'Instagram', '@camprent.outdoor', 'Meningkatkan interaksi & tag foto penyewa'),
-            _buildSocialItemSample(Icons.facebook_outlined, 'Facebook', 'CampRent Outdoor Gear', 'Mempermudah pencarian fanspage komunitas'),
-            _buildSocialItemSample(Icons.video_library_outlined, 'TikTok', '@camprent_official', 'Menampilkan video review & tutorial alat camping'),
-            _buildSocialItemSample(Icons.link_outlined, 'Website / Linktree', 'camprent.id/sewa', 'Tautan langsung ke katalog reservasi online'),
-
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: const Text(
-                'Struk Preview:\n--------------------------------\nInstagram : @camprent.outdoor\nTikTok    : @camprent_official\nFacebook  : CampRent Outdoor Gear\n--------------------------------',
-                style: TextStyle(fontFamily: 'Courier', fontSize: 9, color: Colors.black87),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSocialItemSample(IconData icon, String title, String sample, String desc) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(width: 6),
-                    Text(sample, style: const TextStyle(fontSize: 11, color: AppColors.primary, fontStyle: FontStyle.italic)),
-                  ],
-                ),
-                Text(desc, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // Dialog: Upload Logo Kustom
   void _showUploadLogoDialog(BuildContext context) {

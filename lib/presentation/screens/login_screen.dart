@@ -250,33 +250,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 540;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F2),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 16 : 24,
-              vertical: isMobile ? 16 : 32,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Card(
-                elevation: 4,
-                shadowColor: Colors.black12,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: AppColors.border, width: 1),
-                ),
-                color: Colors.white,
-                child: Padding(
-                  padding: EdgeInsets.all(isMobile ? 20 : 28),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+    final formContent = Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
                         // App Brand & Logo
                         Center(
                           child: Column(
@@ -647,9 +626,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
+                  );
+
+    return Scaffold(
+      backgroundColor: isMobile ? Colors.white : const Color(0xFFF1F5F2),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 24 : 24,
+              vertical: isMobile ? 16 : 32,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: isMobile
+                  ? formContent
+                  : Card(
+                      elevation: 4,
+                      shadowColor: Colors.black12,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: const BorderSide(color: AppColors.border, width: 1),
+                      ),
+                      color: Colors.white,
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: formContent,
+                      ),
+                    ),
             ),
           ),
         ),

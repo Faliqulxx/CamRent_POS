@@ -299,22 +299,30 @@ class AppStateNotifier extends StateNotifier<AppStateData> {
 
         if (storeId != null) {
           final fetchedCats = await SupabaseService().fetchCategories(storeId);
-          if (fetchedCats.isNotEmpty) remoteCategories = fetchedCats;
+          remoteCategories = fetchedCats;
 
           final fetchedItems = await SupabaseService().fetchItems(storeId);
-          if (fetchedItems.isNotEmpty) remoteItems = fetchedItems;
+          remoteItems = fetchedItems;
 
           final fetchedCustomers = await SupabaseService().fetchCustomers(storeId);
-          if (fetchedCustomers.isNotEmpty) remoteCustomers = fetchedCustomers;
+          remoteCustomers = fetchedCustomers;
 
           final fetchedRentals = await SupabaseService().fetchRentals(storeId);
-          if (fetchedRentals.isNotEmpty) remoteRentals = fetchedRentals;
+          remoteRentals = fetchedRentals;
 
           final fetchedShifts = await SupabaseService().fetchShifts(storeId);
-          if (fetchedShifts.isNotEmpty) remoteShifts = fetchedShifts;
+          remoteShifts = fetchedShifts;
 
           final fetchedSettings = await SupabaseService().fetchStoreSettings(storeId);
-          if (fetchedSettings != null) remoteSettings = fetchedSettings;
+          if (fetchedSettings != null) {
+            remoteSettings = fetchedSettings;
+          } else {
+            remoteSettings = StoreSettingsModel(
+              storeName: storeName,
+              cashiers: [],
+              feePresets: [],
+            );
+          }
         }
 
         state = state.copyWith(
